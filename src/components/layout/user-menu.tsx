@@ -11,16 +11,13 @@ export function UserMenu({ session }: { session: Session | null }) {
         <span className="text-sm text-muted-foreground">
           {session.user?.email}
         </span>
-        <form action={handleSignOut}>
-          <Button variant="secondary">Sign out</Button>
-        </form>
       </div>
     );
   }
 
   return (
     <form action={handleSignIn}>
-      <Button variant="outline">Sign in</Button>
+      <Button variant="outline">로그인</Button>
     </form>
   );
 }

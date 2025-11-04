@@ -1,53 +1,43 @@
-// src/app/api/stock/[symbol]/route.ts
 import { NextResponse } from 'next/server';
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { symbol: string } }
-) {
+const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
+const BASE_URL = 'https://api.polygon.io';
+
+export async function GET(_request: Request, { params }: { params: { symbol: string } }) {
   const awaitedParams = await params;
   const symbol = awaitedParams.symbol;
-  const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
 
-  // Check if the API key is available
-  if (!apiKey) {
-    console.error("ALPHA_VANTAGE_API_KEY is not set in .env.local");
-    return NextResponse.json(
-      { error: 'Server configuration error: API key not found. Please contact the administrator.' },
-      { status: 500 }
-    );
+  if (!POLYGON_API_KEY) {
+    return NextResponse.json({ error: 'Polygon API key is not configured' }, { status: 500 });
   }
-
-  if (!symbol) {
-    return NextResponse.json(
-      { error: 'Stock symbol is required' },
-      { status: 400 }
-    );
-  }
-
-  const url = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`;
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      // Log the actual response from the third-party API for debugging
-      const errorBody = await response.text();
-      console.error(`Alpha Vantage API error: ${response.status} ${errorBody}`);
-      throw new Error('Failed to fetch data from Alpha Vantage');
-    }
+    // 안정적인 Polygon.io의 'Ticker Details' 엔드포인트를 사용합니다.
+    const response = await fetch(`${BASE_URL}/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
     const data = await response.json();
 
-    // Alpha Vantage API may return a "Note" for high frequency calls
-    if (data.Note) {
-        return NextResponse.json({ error: 'API call limit reached. Please try again later.' }, { status: 429 });
+    if (data.status !== 'OK' || !data.results) {
+      return NextResponse.json({ error: 'Invalid symbol or no data found from Polygon' }, { status: 404 });
     }
-    
-    return NextResponse.json(data);
+
+    const details = data.results;
+
+    // Polygon.io가 제공하는 데이터만으로 최종 데이터 구성
+    const formattedData = {
+      Symbol: details.ticker,
+      Name: details.name,
+      Description: details.description,
+      Sector: details.sic_description,
+      Industry: null, // Polygon 무료 플랜에서는 제공하지 않음
+      MarketCapitalization: details.market_cap,
+      PERatio: null,
+      EPS: null,
+      '52WeekHigh': null,
+    };
+
+    return NextResponse.json(formattedData);
   } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: 'An error occurred while fetching stock data.' },
-      { status: 500 }
-    );
+    console.error(`Error fetching stock details for ${symbol} from Polygon:`, error);
+    return NextResponse.json({ error: 'An error occurred while fetching stock details' }, { status: 500 });
   }
 }

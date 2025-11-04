@@ -1,24 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ChevronsUpDown, Check } from "lucide-react";
-
-import { cn } from "@/lib/utils";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Loader2, Star } from "lucide-react";
+import { useDebounce } from "@/lib/hooks/use-debounce";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { StockChart } from "./stock-chart";
 
 type Stock = {
   symbol: string;
@@ -26,128 +34,183 @@ type Stock = {
 };
 
 export function StockSearch() {
-  const [stockList, setStockList] = useState<Stock[]>([]);
+  const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<Stock[]>([]);
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
   const [stockData, setStockData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isListLoading, setIsListLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
-    const fetchStockList = async () => {
-      try {
-        const response = await fetch("/api/stock/list");
-        const data = await response.json();
-        setStockList(data);
-      } catch (error) {
-        setError("Failed to load stock list.");
-      } finally {
-        setIsListLoading(false);
-      }
-    };
-    fetchStockList();
+    const savedWatchlist = localStorage.getItem('watchlist');
+    if (savedWatchlist) {
+      setWatchlist(JSON.parse(savedWatchlist));
+    }
   }, []);
 
   useEffect(() => {
-    const fetchStockDetails = async () => {
-      if (!selectedStock) return;
-
-      setIsLoading(true);
-      setError(null);
-      setStockData(null);
-
-      try {
-        const response = await fetch(`/api/stock/${selectedStock.symbol}`);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch data');
+    const searchStocks = async () => {
+      if (debouncedSearchTerm) {
+        setIsSearching(true);
+        setSearchResults([]);
+        try {
+          const response = await fetch(`/api/stock/search/${debouncedSearchTerm}`);
+          const data = await response.json();
+          if (response.ok) {
+            setSearchResults(data);
+          } else {
+            setError(data.error || "검색 중 오류가 발생했습니다.");
+          }
+        } catch (err) {
+          setError("검색 결과를 가져오는데 실패했습니다.");
+        } finally {
+          setIsSearching(false);
         }
-        const data = await response.json();
-        if (data.Symbol) {
-          setStockData(data);
-        } else {
-          setError("Invalid symbol or no data found.");
-        }
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setIsLoading(false);
+      } else {
+        setSearchResults([]);
       }
     };
-    fetchStockDetails();
-  }, [selectedStock]);
+    searchStocks();
+  }, [debouncedSearchTerm]);
+
+  const handleStockSelect = async (stock: Stock) => {
+    setSelectedStock(stock);
+    setIsModalOpen(true);
+    setIsLoading(true);
+    setError(null);
+    setStockData(null);
+
+    try {
+      const response = await fetch(`/api/stock/${stock.symbol}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '종목 정보를 가져오는데 실패했습니다.');
+      }
+      const data = await response.json();
+      if (data.Symbol) {
+        setStockData(data);
+      } else {
+        setError("유효하지 않은 종목이거나 데이터를 찾을 수 없습니다.");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleStartAnalysis = () => {
+    if (selectedStock) {
+      router.push(`/checklist?symbol=${selectedStock.symbol}`);
+    }
+  };
+
+  const toggleWatchlist = (symbol: string) => {
+    const newWatchlist = watchlist.includes(symbol)
+      ? watchlist.filter(s => s !== symbol)
+      : [...watchlist, symbol];
+    
+    setWatchlist(newWatchlist);
+    localStorage.setItem('watchlist', JSON.stringify(newWatchlist));
+    toast.success(
+      watchlist.includes(symbol)
+        ? `${symbol}을(를) 관심 종목에서 제거했습니다.`
+        : `${symbol}을(를) 관심 종목에 추가했습니다.`
+    );
+  };
 
   return (
-    <Card className="w-full max-w-2xl">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>Stock Analysis</CardTitle>
+        <CardTitle>종목 검색</CardTitle>
+        <CardDescription>분석하고 싶은 종목의 이름 또는 심볼을 입력하세요.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              aria-expanded={open}
-              className="w-full justify-between"
-              disabled={isListLoading}
-            >
-              {isListLoading
-                ? "Loading stocks..."
-                : selectedStock
-                ? `${selectedStock.name} (${selectedStock.symbol})`
-                : "Select a stock..."}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-            <Command>
-              <CommandInput placeholder="Search stock..." />
-              <CommandList>
-                <CommandEmpty>No stock found.</CommandEmpty>
-                <CommandGroup>
-                  {stockList.map((stock) => (
-                    <CommandItem
-                      key={stock.symbol}
-                      value={`${stock.symbol} - ${stock.name}`}
-                      onSelect={() => {
-                        setSelectedStock(stock);
-                        setOpen(false);
-                      }}
+      <CardContent className="space-y-4">
+        <Input
+          placeholder="예: Apple 또는 AAPL"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <ScrollArea className="h-[500px] w-full">
+            <div className="grid grid-cols-1 gap-2">
+              {isSearching && (
+                <div className="flex justify-center items-center p-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!isSearching && searchResults.length > 0 && (
+                searchResults.map((stock) => (
+                  <DialogTrigger asChild key={stock.symbol}>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => handleStockSelect(stock)}
                     >
-                      <Check
-                        className={cn(
-                          "mr-2 h-4 w-4",
-                          selectedStock?.symbol === stock.symbol ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                      {stock.name} ({stock.symbol})
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-
-        {isLoading && <p className="mt-4 text-center">Loading analysis...</p>}
-        {error && <p className="mt-4 text-red-500">{error}</p>}
-
-        {stockData && !isLoading && (
-          <div className="mt-6 space-y-4">
-            <h2 className="text-2xl font-bold">{stockData.Name} ({stockData.Symbol})</h2>
-            <p className="text-muted-foreground">{stockData.Description}</p>
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                <p><strong>Sector:</strong> {stockData.Sector}</p>
-                <p><strong>Industry:</strong> {stockData.Industry}</p>
-                <p><strong>Market Cap:</strong> {parseInt(stockData.MarketCapitalization).toLocaleString()}</p>
-                <p><strong>P/E Ratio:</strong> {stockData.PERatio}</p>
-                <p><strong>EPS:</strong> {stockData.EPS}</p>
-                <p><strong>52 Week High:</strong> ${stockData['52WeekHigh']}</p>
+                      <span className="font-semibold mr-2">{stock.symbol}</span>
+                      <span className="text-muted-foreground">{stock.name}</span>
+                    </Button>
+                  </DialogTrigger>
+                ))
+              )}
+              {!isSearching && searchResults.length === 0 && debouncedSearchTerm && (
+                <p className="text-center text-muted-foreground p-4">검색 결과가 없습니다.</p>
+              )}
             </div>
-          </div>
-        )}
+          </ScrollArea>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>
+                {isLoading && <Skeleton className="h-7 w-48" />}
+                {error && '오류 발생'}
+                {stockData && !isLoading && `${stockData.Name} (${stockData.Symbol})`}
+              </DialogTitle>
+              {stockData && !isLoading && (
+                <DialogDescription className="pt-2">
+                  {stockData.Description}
+                </DialogDescription>
+              )}
+            </DialogHeader>
+            
+            {isLoading ? (
+              <div className="space-y-4 py-4">
+                <Skeleton className="h-[250px] w-full mb-4" />
+                <Skeleton className="h-4 w-full" />
+                <div className="grid grid-cols-2 gap-4">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : error ? (
+              <div className="py-4 text-center text-red-500">{error}</div>
+            ) : stockData && (
+              <>
+                <StockChart symbol={stockData.Symbol} />
+                <div className="grid grid-cols-2 gap-4 py-4">
+                  <p><strong>섹터:</strong> {stockData.Sector || 'N/A'}</p>
+                  <p><strong>시가총액:</strong> {stockData.MarketCapitalization ? stockData.MarketCapitalization.toLocaleString() : 'N/A'}</p>
+                </div>
+                <DialogFooter className="sm:justify-between gap-2">
+                  <Button variant="outline" onClick={() => toggleWatchlist(stockData.Symbol)}>
+                    <Star className={cn("h-4 w-4 mr-2", watchlist.includes(stockData.Symbol) ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground")} />
+                    {watchlist.includes(stockData.Symbol) ? '관심 종목 제거' : '관심 종목 추가'}
+                  </Button>
+                  <Button onClick={handleStartAnalysis} className="w-full sm:w-auto">
+                    사전 분석 시작하기
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

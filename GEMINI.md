@@ -1,4 +1,4 @@
-# GEMINI 기술 인수인계 문서
+# GEMINI 기술 인수인계 문서 (v2)
 
 **문서 목적**: 이 문서는 다른 Gemini AI 에이전트가 프로젝트의 기술적 맥락, 설계 결정, 개발 과정을 완벽하게 이해하고 작업을 원활하게 이어받을 수 있도록 작성되었습니다.
 
@@ -6,99 +6,99 @@
 
 ## 1. 프로젝트 개요
 
-**"사전 거래 분석 및 관리 도구"**는 트레이더가 감정적 매매를 배제하고 원칙에 기반한 트레이딩을 할 수 있도록 돕는 웹 애플리케이션입니다.
+**"사전 거래 분석 및 투자 성향 관리 도구"**는 사용자가 자신의 투자 성향에 맞춰 체계적이고 원칙에 기반한 트레이딩을 할 수 있도록 돕는 개인화된 웹 애플리케이션입니다.
 
-- **핵심 기능**: 사전 거래 리스크 분석, 주식 종목 분석, 거래 기록 및 실수 분석(오답노트).
-- **주요 기술 스택**: Next.js 16+ (App Router, Turbopack), TypeScript, Tailwind CSS, shadcn/ui.
-- **주요 라이브러리**: NextAuth.js v5 (인증), Zod/React Hook Form (폼 유효성 검사), PapaParse (CSV 파싱), Lucide React (아이콘).
+- **핵심 기능**:
+  - **투자 성향 분석**: 첫 로그인 시 퀴즈를 통해 사용자 성향(보수적/공격적)을 분석하고 `localStorage`에 저장.
+  - **개인화된 기업 분석**: 저장된 성향에 따라 동적으로 기준이 변경되는 기업 분석 체크리스트 제공.
+  - **관심 종목(Watchlist)**: 관심 종목을 `localStorage`에 저장하고 대시보드에서 모아보기.
+  - **매매 복기 노트**: 모든 매매 내역을 `localStorage`에 기록하고 표로 관리.
+  - **하이브리드 API 데이터 조회**: Yahoo Finance와 Polygon.io의 장점을 결합하여 안정적인 데이터 조회.
+  - **마이페이지**: 사용자 정보 및 투자 성향 확인, 로그아웃 기능.
 
----
-
-## 2. 프로젝트 설정 및 주요 의존성
-
-### 가. 초기 설정
-- **shadcn/ui 초기화**: `pnpm dlx shadcn@latest init`
-- **shadcn/ui 컴포넌트 추가**: 아래 컴포넌트들이 `pnpm dlx shadcn@latest add [component]` 명령어를 통해 추가되었습니다.
-  - `button`, `card`, `form`, `input`, `label`, `select`, `switch`, `sonner`, `table`, `slider`, `tabs`, `badge`, `tooltip`, `separator`, `menubar`, `dropdown-menu`, `sheet`, `avatar`, `textarea`, `popover`, `command`, `dialog`
-
-### 나. 주요 라이브러리 및 사용 목적
-- `next-auth@5.0.0-beta.30`: GitHub OAuth 인증 및 세션 관리를 위해 사용.
-- `papaparse`: Alpha Vantage의 종목 리스트 API가 CSV로 응답하므로, 이를 JSON으로 변환하기 위해 서버 측에서 사용.
-- `lucide-react`: `shadcn/ui` 컴포넌트 내 아이콘 표시를 위해 사용.
+- **주요 기술 스택**: Next.js (App Router/Turbopack), TypeScript, Tailwind CSS, shadcn/ui, Recharts.
+- **주요 라이브러리**: NextAuth.js v5, Zod/React Hook Form, Lucide React.
 
 ---
 
-## 3. 핵심 아키텍처 및 설계 결정
+## 2. 핵심 아키텍처 및 설계 결정
 
-### 가. 인증 흐름 (NextAuth.js v5)
-- **중앙 집중식 인증 로직**: 모든 인증/인가 규칙은 **`src/auth.ts`** 파일의 `callbacks.authorized` 객체 내에서 중앙 관리됩니다.
-- **미들웨어 역할**: **`middleware.ts`**는 `auth.ts`에서 정의된 인증 로직을 가져와 모든 경로(`matcher`)에 적용하는 단순한 실행기(runner) 역할을 합니다. 이 구조는 로직 변경 시 `auth.ts`만 수정하면 되므로 유지보수성을 높입니다.
-- **서버 액션 분리**: 클라이언트 컴포넌트(`user-menu.tsx`) 내에서 "use server"를 직접 사용하는 것이 최신 Next.js 정책에 위배되어, 로그인/아웃 로직을 **`src/lib/actions.ts`** 파일로 분리하고 컴포넌트에서는 이 함수들을 `action`으로 참조합니다.
+### 가. 하이브리드 외부 API 연동 (최종)
+프로젝트 초기에는 단일 API(Alpha Vantage, FMP)를 사용하려 했으나, 무료 플랜의 엄격한 제한(호출 횟수, 레거시 엔드포인트, 봇 차단)으로 인해 심각한 불안정성을 겪었습니다. 이를 해결하기 위해 각 기능에 가장 적합한 무료 API를 선별하여 결합하는 **하이브리드 전략**을 최종 채택했습니다.
 
-### 나. 외부 API 연동 (Alpha Vantage)
-- **API 키 보안**: 프론트엔드에서 Alpha Vantage API를 직접 호출하지 않고, Next.js의 **API 라우트 (`src/app/api/...`)**를 중개자로 사용합니다. 이를 통해 `ALPHA_VANTAGE_API_KEY`를 서버 측 환경 변수로 안전하게 숨기고, 클라이언트에는 노출시키지 않습니다.
-- **서버 측 캐싱**: 전체 종목 리스트 API(`api/stock/list`)는 호출 비용이 높고 데이터 변경 주기가 길기 때문에, 간단한 **인메모리 변수 캐싱**을 구현하여 24시간 동안 동일한 데이터를 재사용하도록 최적화했습니다.
+- **종목 검색 (`/api/stock/search/[query]`)**: **Yahoo Finance (Autocomplete API)**
+  - **선택 이유**: 호출 제한이 넉넉하고 검색 속도가 빨라 사용자 경험에 가장 유리합니다.
+- **종목 상세 정보 (`/api/stock/[symbol]`)**: **Polygon.io (Ticker Details API)**
+  - **선택 이유**: 공식 API이므로 서버 간 호출에도 차단되지 않아 매우 안정적입니다. PER, EPS 등 상세 재무 지표는 제공하지 않지만, 핵심 정보(회사 개요, 시가총액, 업종)를 안정적으로 얻는 것이 더 중요하다고 판단했습니다.
+- **주가 차트 데이터 (`/api/stock/chart/[symbol]`)**: **Yahoo Finance (Chart API)**
+  - **선택 이유**: 상세 정보 API와 달리, 차트 API는 비공식적 사용에도 비교적 관대하여 안정적으로 작동하며, 풍부한 과거 시세 데이터를 제공합니다.
 
----
+### 나. 사용자 개인화 및 상태 관리
+별도의 데이터베이스 없이 사용자 경험을 개인화하기 위해 **`localStorage`**를 핵심 저장소로 활용합니다.
 
-## 4. 기능별 핵심 파일 경로
+- **투자 성향 (`investmentType`)**: 첫 로그인 시 `/quiz` 페이지로 강제 리디렉션하여 성향 분석을 유도합니다. 분석 결과('conservative'/'aggressive')는 `localStorage`에 저장되어, 이후 `/checklist` 페이지 등에서 이 값을 읽어 개인화된 UI와 로직을 제공합니다.
+- **관심 종목 (`watchlist`)**: 사용자가 종목 상세 모달에서 별 버튼을 클릭하면, 종목 심볼이 `localStorage`의 배열에 추가/제거됩니다. 대시보드는 이 배열을 읽어 관심 종목 목록을 동적으로 표시합니다.
+- **매매 복기 기록 (`journalEntries`)**: `/mistakes` 페이지에서 작성된 매매 기록 객체들이 `localStorage`의 배열에 저장되고, 테이블 형태로 렌더링됩니다.
 
-- **인증**:
-  - 설정 및 콜백: `src/auth.ts`
-  - 미들웨어: `middleware.ts`
-  - 서버 액션: `src/lib/actions.ts`
-  - UI 컴포넌트: `src/components/layout/user-menu.tsx`
-- **사전 거래 체크리스트**:
-  - 페이지: `src/app/(app)/checklist/page.tsx`
-  - 폼 로직: `src/components/checklist/checklist-form.tsx`
-  - Zod 스키마: `src/lib/schemas.ts`
-- **주식 분석**:
-  - 페이지: `src/app/(app)/trades/page.tsx`
-  - UI 컴포넌트: `src/components/trades/stock-search.tsx`
-  - 종목 상세 정보 API: `src/app/api/stock/[symbol]/route.ts`
-  - 전체 종목 리스트 API: `src/app/api/stock/list/route.ts`
+### 다. 라우팅 및 레이아웃
+- **라우트 그룹 활용**: 투자 성향 분석 퀴즈 페이지(`(full)/quiz`)는 사이드바와 헤더가 없는 독립적인 경험을 제공하기 위해 `(full)` 라우트 그룹으로 분리하여 별도의 레이아웃을 적용했습니다. 나머지 모든 페이지는 `(app)` 그룹에 속하여 공통 레이아웃(사이드바, 헤더)을 공유합니다.
 
 ---
 
-## 5. 개발 이력 및 문제 해결 (Troubleshooting History)
+## 3. 기능별 핵심 파일 경로
+
+- **인증 및 개인화**:
+  - 첫 로그인 리디렉션: `src/app/(app)/dashboard/page.tsx`
+  - 투자 성향 분석 퀴즈: `src/app/(full)/quiz/page.tsx`
+  - 마이페이지: `src/app/(app)/mypage/page.tsx`
+- **기업 분석**:
+  - 종목 검색 UI: `src/components/trades/stock-search.tsx`
+  - 개인화된 체크리스트: `src/components/checklist/stock-analysis.tsx`
+  - 주가 차트: `src/components/trades/stock-chart.tsx`
+- **백엔드 API 라우트**:
+  - 종목 검색: `src/app/api/stock/search/[query]/route.ts` (Yahoo)
+  - 종목 상세: `src/app/api/stock/[symbol]/route.ts` (Polygon)
+  - 차트 데이터: `src/app/api/stock/chart/[symbol]/route.ts` (Yahoo)
+- **매매 복기**:
+  - 페이지 및 폼/테이블: `src/app/(app)/mistakes/page.tsx`
+
+---
+
+## 4. 개발 이력 및 문제 해결 (Troubleshooting History)
 
 **이 섹션은 미래의 AI가 동일한 문제에 직면했을 때의 디버깅 시간을 단축시키기 위해 매우 중요합니다.**
 
-- **문제 1: API 라우트의 동적 파라미터 `params` 오류**
-  - **현상**: `GET /api/stock/[symbol]` 호출 시 `params is a Promise and must be unwrapped with await` 오류가 지속적으로 발생.
-  - **시도**: 함수 시그니처를 `context: { params }` 등 여러 방식으로 변경했으나 실패.
-  - **최종 해결책**: 오류 메시지를 문자 그대로 따라, `params` 객체를 `await` 키워드로 풀어준 후에 속성에 접근하는 방식으로 해결. 이는 일반적이지 않으나, 이 프로젝트의 Next.js/Turbopack 환경에서는 유효한 해결책임.
-    ```typescript
-    // src/app/api/stock/[symbol]/route.ts
-    export async function GET(_request: Request, { params }: { params: { symbol: string } }) {
-      const awaitedParams = await params; // <--- This was the key fix
-      const symbol = awaitedParams.symbol;
-      // ...
-    }
-    ```
+- **문제 1: 수많은 외부 API 제한 문제 (가장 중요)**
+  - **현상**: Alpha Vantage(호출 횟수 초과), FMP(레거시 엔드포인트), Yahoo Finance 상세 정보(봇 차단) 등 사용하는 모든 API에서 지속적으로 데이터 조회 실패 발생.
+  - **시도**: API를 계속해서 교체했으나, 단일 무료 API로는 모든 기능(빠른 검색, 안정적인 상세 정보, 차트)을 만족시킬 수 없었음.
+  - **최종 해결책**: 각 기능의 특성에 맞춰 가장 적합한 API를 선별하는 **하이브리드 아키텍처**를 채택하여 안정성을 확보함. (상세 내용은 2-가 항 참조)
 
-- **문제 2: 로그인 후 리디렉션 불안정**
-  - **현상**: 로그인 후 `/` 경로로 재접속 시 `/dashboard`로 이동하지 않음.
-  - **시도**: 초기에는 `middleware.ts`에서 직접 리디렉션 로직을 처리하려 했으나 불안정.
-  - **최종 해결책**: NextAuth.js v5의 표준 패턴인 `auth.ts`의 `callbacks.authorized` 내에서 모든 라우팅 규칙(보호/리디렉션)을 정의하는 방식으로 안정성을 확보함.
+- **문제 2: `JWTSessionError: no matching decryption secret`**
+  - **현상**: API 키를 정리하는 과정에서 `AUTH_SECRET`을 실수로 삭제한 후, 서버를 재시작하고 `.env.local` 파일을 복원해도 인증 오류가 지속적으로 발생.
+  - **원인**: Next.js 개발 서버 캐시(`.next` 폴더)와 브라우저에 저장된 쿠키가 `AUTH_SECRET`이 없던 시절의 손상된 세션 정보를 계속 사용하고 있었기 때문.
+  - **최종 해결책**: ① `.next` 폴더 완전 삭제, ② 브라우저 개발자 도구에서 관련 쿠키 수동 삭제, ③ `auth.ts`에 `secret` 옵션 명시적 추가 후 서버를 재시작하여 모든 캐시를 초기화함으로써 해결.
 
-- **문제 3: 파일 누락 및 캐시 문제**
-  - **현상**: 분명히 코드를 수정한 것 같은데, 브라우저에 이전 버전의 UI가 계속 표시됨 (예: `trades` 페이지에 검색창이 없음).
-  - **원인**: 이전 `write_file` 작업이 누락되었거나, Next.js 개발 서버의 캐시가 변경사항을 반영하지 못함.
-  - **해결책**: `read_file`로 파일의 실제 내용을 확인하여 누락된 파일을 재생성하고, `rm -r .next` 명령어로 캐시를 완전히 삭제한 후 서버를 재시작하여 해결.
+- **문제 3: Recharts 차트의 선이 그려지지 않는 현상**
+  - **현상**: Y축과 점은 표시되나, 선(Line)이 그려지지 않음.
+  - **시도**: `connectNulls` 속성 추가, 데이터 형식(string -> number) 변경 등을 시도했으나 실패.
+  - **최종 해결책**: 백엔드 API(`api/stock/chart`)에서 데이터를 프론트로 보내기 전, `typeof price === 'number' && isFinite(price)` 조건을 사용하여 **데이터 배열에서 유효한 숫자가 아닌 모든 값을 원천적으로 제거**하는 강력한 정제 로직을 추가하여 해결. Recharts는 유효하지 않은 값이 하나라도 있으면 선 전체를 그리지 않음.
+
+- **문제 4: API 라우트의 동적 파라미터 `params` 오류**
+  - **현상**: `GET /api/.../[symbol]` 호출 시 `params is a Promise` 오류 발생.
+  - **해결책**: `GEMINI.md` v1에 기록된 대로, `const awaitedParams = await params;` 코드를 추가하여 해결.
 
 ---
 
-## 6. 필수 환경 변수 (`.env.local`)
+## 5. 필수 환경 변수 (`.env.local`)
 
 ```
 # GitHub OAuth App credentials
 AUTH_GITHUB_ID=...
 AUTH_GITHUB_SECRET=...
 
-# Secret for signing NextAuth.js tokens (generate with `openssl rand -base64 32`)
+# Secret for signing NextAuth.js tokens
 AUTH_SECRET=...
 
-# API Key for Alpha Vantage
-ALPHA_VANTAGE_API_KEY=...
+# API Key for Polygon.io (for stable stock detail fetching)
+POLYGON_API_KEY=...
 ```
