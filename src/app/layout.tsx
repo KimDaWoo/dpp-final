@@ -4,6 +4,8 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { SessionProvider } from "next-auth/react";
 
+import { CurrencyProvider } from "@/contexts/currency-context";
+
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -20,8 +22,10 @@ export default function RootLayout({
     <html lang="ko">
       <body className={inter.className}>
         <SessionProvider>
-          {children}
-          <Toaster />
+          <CurrencyProvider>
+            {children}
+            <Toaster />
+          </CurrencyProvider>
         </SessionProvider>
       </body>
     </html>

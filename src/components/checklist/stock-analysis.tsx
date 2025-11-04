@@ -4,11 +4,14 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { useCurrency } from '@/contexts/currency-context';
+import { Badge } from '@/components/ui/badge';
 
 type AnalysisCriterion = {
   description: string;
   isPassed: boolean;
   currentValue: string;
+  type: 'money' | 'text'; // 기준 타입을 추가
 };
 
 type AnalysisResult = {
@@ -17,20 +20,20 @@ type AnalysisResult = {
   requiredCount: number;
 };
 
-// Polygon.io 데이터 기반의 간소화된 분석 규칙
 const conservativeCriteria = {
-  marketCap: 10_000_000_000, // 100억 달러
+  marketCap: 10_000_000_000,
   sectors: ['Services', 'Finance', 'Utilities'],
   requiredCount: 2,
 };
 
 const aggressiveCriteria = {
-  marketCap: 1_000_000_000, // 10억 달러
+  marketCap: 1_000_000_000,
   sectors: ['Technology', 'Manufacturing'],
   requiredCount: 1,
 };
 
 export function StockAnalysis({ symbol }: { symbol: string }) {
+  const { currency, formatCurrency } = useCurrency();
   const [stockData, setStockData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +74,10 @@ export function StockAnalysis({ symbol }: { symbol: string }) {
     const marketCapPassed = stockData.MarketCapitalization > criteria.marketCap;
     if (marketCapPassed) passCount++;
     results.push({
-      description: `시가총액 > ${criteria.marketCap.toLocaleString()} 달러`,
+      description: `시가총액 > ${formatCurrency(criteria.marketCap)}`,
       isPassed: marketCapPassed,
-      currentValue: `현재 ${stockData.MarketCapitalization?.toLocaleString() || 'N/A'} 달러`,
+      currentValue: `현재 ${formatCurrency(stockData.MarketCapitalization)}`,
+      type: 'money', // 타입: money
     });
 
     // 2. 업종 기준
@@ -83,6 +87,7 @@ export function StockAnalysis({ symbol }: { symbol: string }) {
       description: `업종이 [${criteria.sectors.join(', ')}] 중 하나에 포함`,
       isPassed: sectorPassed,
       currentValue: `현재 ${stockData.Sector || 'N/A'}`,
+      type: 'text', // 타입: text
     });
 
     setAnalysisResult({
@@ -90,7 +95,7 @@ export function StockAnalysis({ symbol }: { symbol: string }) {
       passCount,
       requiredCount: criteria.requiredCount,
     });
-  }, [stockData, investorType]);
+  }, [stockData, investorType, formatCurrency]);
 
   if (isLoading || !investorType) {
     return (
@@ -119,7 +124,11 @@ export function StockAnalysis({ symbol }: { symbol: string }) {
                 {item.isPassed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
                 <span className="font-medium">{item.description}</span>
               </div>
-              <span className="text-sm text-muted-foreground">{item.currentValue}</span>
+              <div className="flex items-center gap-2">
+                {/* item.type이 'money'일 때만 환율 태그를 표시 */}
+                {item.type === 'money' && <Badge variant="secondary">{currency}</Badge>}
+                <span className="text-sm text-muted-foreground">{item.currentValue}</span>
+              </div>
             </div>
           ))}
           

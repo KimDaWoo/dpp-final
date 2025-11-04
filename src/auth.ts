@@ -19,23 +19,19 @@ export const {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isAppRoute = nextUrl.pathname.startsWith('/dashboard') || 
-                         nextUrl.pathname.startsWith('/checklist') || 
-                         nextUrl.pathname.startsWith('/trades') || 
-                         nextUrl.pathname.startsWith('/mistakes');
+      const isAppRoute = ['/dashboard', '/checklist', '/trades', '/mistakes', '/mypage', '/quiz'].some(path => nextUrl.pathname.startsWith(path));
 
-      if (isAppRoute) {
-        // If the user is on an app route, they must be logged in.
-        return isLoggedIn;
-      } else if (isLoggedIn) {
-        // If the user is logged in and visits a public route like the home page,
-        // redirect them to the dashboard.
-        if (nextUrl.pathname === '/') {
-          return NextResponse.redirect(new URL('/dashboard', nextUrl));
-        }
+      // 1. 로그인한 사용자가 초기 화면('/')에 접근한 경우
+      if (isLoggedIn && nextUrl.pathname === '/') {
+        return NextResponse.redirect(new URL('/dashboard', nextUrl));
       }
-      
-      // Allow access to all other pages (like the login page) by default.
+
+      // 2. 로그인하지 않은 사용자가 보호된 경로에 접근한 경우
+      if (!isLoggedIn && isAppRoute) {
+        return false; // 로그인 페이지로 리디렉션
+      }
+
+      // 3. 그 외 모든 경우는 허용
       return true;
     },
   },

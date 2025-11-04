@@ -1,21 +1,27 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation'; // useRouter 임포트
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { handleSignOut } from '@/lib/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function MyPage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [investmentType, setInvestmentType] = useState<string | null>(null);
 
   useEffect(() => {
     const type = localStorage.getItem('investmentType');
     setInvestmentType(type);
   }, []);
+
+  const handleRetakeQuiz = () => {
+    localStorage.removeItem('investmentType');
+    router.push('/quiz');
+  };
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -62,22 +68,27 @@ export default function MyPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>나의 투자 성향</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="space-y-1.5">
+            <CardTitle>나의 투자 성향</CardTitle>
+            <CardDescription>이 성향은 기업 분석 체크리스트의 기준에 자동으로 반영됩니다.</CardDescription>
+          </div>
+          <Button variant="outline" onClick={handleRetakeQuiz}>성향 다시 분석하기</Button>
         </CardHeader>
         <CardContent>
           <p className="text-lg">
             분석 결과: <span className="font-bold text-primary">{investmentType === 'aggressive' ? '공격적 투자자' : '보수적 투자자'}</span>
           </p>
-          <p className="text-muted-foreground mt-2">
-            이 성향은 기업 분석 체크리스트의 기준에 자동으로 반영됩니다.
-          </p>
         </CardContent>
       </Card>
 
-      <form action={handleSignOut}>
-        <Button variant="destructive" className="w-full sm:w-auto">로그아웃</Button>
-      </form>
+      <Button 
+        variant="destructive" 
+        className="w-full sm:w-auto"
+        onClick={() => signOut({ callbackUrl: '/' })}
+      >
+        로그아웃
+      </Button>
     </div>
   );
 }

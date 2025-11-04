@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCurrency } from '@/contexts/currency-context'; // useCurrency 훅 임포트
 
 interface ChartData {
   date: string;
@@ -10,6 +11,7 @@ interface ChartData {
 }
 
 export function StockChart({ symbol }: { symbol: string }) {
+  const { currency, exchangeRate, formatCurrency } = useCurrency(); // 1. 통화 정보 연동
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +39,17 @@ export function StockChart({ symbol }: { symbol: string }) {
     fetchChartData();
   }, [symbol]);
 
+  // 2. 데이터 변환: KRW일 경우 환율 적용
+  const transformedData = useMemo(() => {
+    if (currency === 'KRW' && exchangeRate) {
+      return chartData.map(item => ({
+        ...item,
+        price: item.price * exchangeRate,
+      }));
+    }
+    return chartData;
+  }, [chartData, currency, exchangeRate]);
+
   if (isLoading) {
     return <Skeleton className="h-[250px] w-full" />;
   }
@@ -48,15 +61,23 @@ export function StockChart({ symbol }: { symbol: string }) {
   return (
     <div className="h-[250px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
+        <LineChart data={transformedData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
           <XAxis dataKey="date" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+          {/* 3. Y축 서식 변경 */}
           <YAxis 
             tick={{ fontSize: 12 }} 
             tickLine={false} 
             axisLine={false} 
-            domain={[dataMin => Math.floor(dataMin * 0.9), dataMax => Math.ceil(dataMax * 1.1)]}
-            tickFormatter={(tick) => Math.round(tick).toString()}
+            domain={[dataMin => dataMin * 0.9, dataMax => dataMax * 1.1]}
+            tickFormatter={(value) => {
+              // 축에는 간결한 포맷 적용 (예: 1.5M, 13억)
+              return new Intl.NumberFormat(currency === 'KRW' ? 'ko-KR' : 'en-US', { 
+                notation: 'compact', 
+                compactDisplay: 'short' 
+              }).format(value);
+            }}
           />
+          {/* 3. 툴팁 서식 변경 */}
           <Tooltip
             cursor={{ strokeDasharray: '3 3' }}
             contentStyle={{
@@ -64,6 +85,7 @@ export function StockChart({ symbol }: { symbol: string }) {
               borderColor: 'hsl(var(--border))',
               fontSize: '12px',
             }}
+            formatter={(value: number) => [formatCurrency(value), '가격']}
           />
           <Line 
             connectNulls={true}
@@ -71,7 +93,7 @@ export function StockChart({ symbol }: { symbol: string }) {
             dataKey="price" 
             stroke="hsl(var(--primary))" 
             strokeWidth={1.5} 
-            dot={{ r: 3 }} 
+            dot={false} 
             activeDot={{ r: 8 }} 
           />
         </LineChart>

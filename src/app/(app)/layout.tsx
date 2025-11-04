@@ -1,7 +1,9 @@
 import { SideNav } from "@/components/layout/side-nav";
 import { MainNav } from "@/components/layout/main-nav";
 import { UserMenu } from "@/components/layout/user-menu";
+import { CurrencyToggle } from "@/components/layout/currency-toggle";
 import Link from "next/link";
+import Image from "next/image"; // Image 컴포넌트 임포트
 import { auth } from "@/auth";
 
 export default async function AppLayout({
@@ -16,6 +18,7 @@ export default async function AppLayout({
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
             <Link href="/" className="flex items-center gap-2 font-semibold">
+              <Image src="/logo.svg" alt="Trading Journal Logo" width={24} height={24} />
               <span>Trading Journal</span>
             </Link>
           </div>
@@ -29,6 +32,7 @@ export default async function AppLayout({
           <div className="w-full flex-1">
             <MainNav />
           </div>
+          <CurrencyToggle />
           <UserMenu session={session} />
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">

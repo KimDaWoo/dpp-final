@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -22,11 +23,12 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, Star } from "lucide-react";
+import { Loader2, Star, AlertTriangle } from "lucide-react"; // AlertTriangle 아이콘 임포트
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { StockChart } from "./stock-chart";
+import { useCurrency } from "@/contexts/currency-context";
 
 type Stock = {
   symbol: string;
@@ -35,6 +37,7 @@ type Stock = {
 
 export function StockSearch() {
   const router = useRouter();
+  const { currency, formatCurrency } = useCurrency();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<Stock[]>([]);
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
@@ -89,14 +92,14 @@ export function StockSearch() {
     try {
       const response = await fetch(`/api/stock/${stock.symbol}`);
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '종목 정보를 가져오는데 실패했습니다.');
+        // API 에러 발생 시, 여기서 에러 상태를 설정
+        throw new Error('정보 조회 실패');
       }
       const data = await response.json();
       if (data.Symbol) {
         setStockData(data);
       } else {
-        setError("유효하지 않은 종목이거나 데이터를 찾을 수 없습니다.");
+        throw new Error('정보 조회 실패');
       }
     } catch (err: any) {
       setError(err.message);
@@ -169,7 +172,7 @@ export function StockSearch() {
             <DialogHeader>
               <DialogTitle>
                 {isLoading && <Skeleton className="h-7 w-48" />}
-                {error && '오류 발생'}
+                {error && '정보 조회 실패'}
                 {stockData && !isLoading && `${stockData.Name} (${stockData.Symbol})`}
               </DialogTitle>
               {stockData && !isLoading && (
@@ -190,13 +193,33 @@ export function StockSearch() {
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : error ? (
-              <div className="py-4 text-center text-red-500">{error}</div>
+              // 개선된 오류 UI
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+                <p className="text-muted-foreground">
+                  종목 정보를 가져오는 데 실패했습니다.<br/>
+                  API 호출 한도(분당 5회)를 초과했거나<br/>
+                  유효하지 않은 종목일 수 있습니다.
+                </p>
+                <Button variant="outline" className="mt-6" onClick={() => setIsModalOpen(false)}>
+                  닫기
+                </Button>
+              </div>
             ) : stockData && (
               <>
                 <StockChart symbol={stockData.Symbol} />
                 <div className="grid grid-cols-2 gap-4 py-4">
-                  <p><strong>섹터:</strong> {stockData.Sector || 'N/A'}</p>
-                  <p><strong>시가총액:</strong> {stockData.MarketCapitalization ? stockData.MarketCapitalization.toLocaleString() : 'N/A'}</p>
+                  <div className="flex flex-col space-y-1.5">
+                    <p className="font-semibold">섹터</p>
+                    <Badge variant="secondary" className="w-fit">{stockData.Sector || 'N/A'}</Badge>
+                  </div>
+                  <div className="flex flex-col space-y-1.5">
+                    <p className="font-semibold">시가총액</p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{currency}</Badge>
+                      <span className="font-bold">{formatCurrency(stockData.MarketCapitalization)}</span>
+                    </div>
+                  </div>
                 </div>
                 <DialogFooter className="sm:justify-between gap-2">
                   <Button variant="outline" onClick={() => toggleWatchlist(stockData.Symbol)}>
