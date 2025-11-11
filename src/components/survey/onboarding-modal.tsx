@@ -45,12 +45,14 @@ export function OnboardingModal({
   const [step, setStep] = useState<"quiz" | "indicators">(initialStep);
   const { setPreferences } = useIndicatorPreferences();
   const [selectedIndicators, setSelectedIndicators] = useState<IndicatorKey[]>(
-    initialIndicators
+    [] // Initialize with an empty array, will be updated in useEffect
   );
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedIndicators(initialIndicators);
+      // Ensure mandatory indicators are always included in the local state
+      const combinedIndicators = Array.from(new Set([...MANDATORY_INDICATORS, ...initialIndicators]));
+      setSelectedIndicators(combinedIndicators);
       setStep(initialStep);
     }
   }, [isOpen, initialIndicators, initialStep]);
@@ -68,11 +70,16 @@ export function OnboardingModal({
   };
 
   const handleIndicatorSubmit = () => {
-    if (selectedIndicators.length === 0) {
+    // The setPreferences function in the context already handles merging mandatory indicators.
+    // So, we just pass the currently selected (non-mandatory) indicators.
+    // However, to be safe, let's ensure mandatory ones are in the list being submitted.
+    const finalIndicatorsToSubmit = Array.from(new Set([...MANDATORY_INDICATORS, ...selectedIndicators]));
+
+    if (finalIndicatorsToSubmit.length === 0) { // This check might be redundant if mandatory are always there
       toast.warning("하나 이상의 선호 지표를 선택해주세요.");
       return;
     }
-    setPreferences(selectedIndicators);
+    setPreferences(finalIndicatorsToSubmit);
     toast.success("새로운 설정이 저장되었습니다!");
     onClose();
   };
@@ -116,7 +123,7 @@ export function OnboardingModal({
                     const checkbox = (
                       <Checkbox
                         id={key}
-                        checked={selectedIndicators.includes(key)}
+                        checked={selectedIndicators.includes(key)} // This is the key part
                         onCheckedChange={() =>
                           !isMandatory && handleIndicatorCheckboxChange(key)
                         }
@@ -144,7 +151,7 @@ export function OnboardingModal({
                             </TooltipContent>
                           </Tooltip>
                         ) : (
-                          <>
+                          <> 
                             {checkbox}
                             <Label htmlFor={key} className="cursor-pointer">
                               {AVAILABLE_INDICATORS[key]}

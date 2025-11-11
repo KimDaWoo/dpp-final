@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useTradeLog } from "@/contexts/trade-log-context";
+import { useTradeLog, TradeLog } from "@/contexts/trade-log-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -12,10 +12,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { toast } from "sonner";
 import { StockInfo } from "@/lib/stock-utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, SearchIcon, X } from "lucide-react";
+import { AlertCircle, SearchIcon, X, CalendarIcon } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Command as CommandPrimitive } from "cmdk";
 import { Badge } from "../ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 // Zod 스키마 정의
 const TradeLogSchema = z.object({
@@ -23,9 +27,8 @@ const TradeLogSchema = z.object({
   name: z.string().min(1, "종목을 검색하여 선택해주세요."),
   buyPrice: z.coerce.number().min(0, "매수가는 0 이상이어야 합니다."),
   buyQuantity: z.coerce.number().int().min(1, "매수량은 1 이상이어야 합니다."),
-  buyDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)."),
+  buyDate: z.date({ required_error: "매수일을 선택해주세요."}),
   
-  // 빈 문자열을 undefined로 전처리하여 optional 필드가 제대로 동작하도록 수정
   sellPrice: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.coerce.number({ invalid_type_error: "숫자를 입력해주세요." }).min(0, "매도가는 0 이상이어야 합니다.").optional()
@@ -34,15 +37,10 @@ const TradeLogSchema = z.object({
     (val) => (val === "" ? undefined : val),
     z.coerce.number({ invalid_type_error: "숫자를 입력해주세요." }).int().min(1, "매도량은 1 이상이어야 합니다.").optional()
   ),
-  sellDate: z.preprocess(
-    (val) => (val === "" ? undefined : val),
-    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).").optional()
-  ),
+  sellDate: z.date().optional(),
 }).refine(data => {
   const sellFields = [data.sellPrice, data.sellQuantity, data.sellDate];
-  // undefined가 아닌 필드의 수를 셉니다.
   const filledSellFields = sellFields.filter(field => field !== undefined).length;
-  // 모든 필드가 비어있거나(0개), 모든 필드가 채워져 있어야(3개) 유효합니다.
   return filledSellFields === 0 || filledSellFields === 3;
 }, {
   message: "매도 관련 정보(가격, 수량, 날짜)는 모두 입력하거나 모두 비워두어야 합니다.",
@@ -54,87 +52,72 @@ type TradeLogFormValues = z.infer<typeof TradeLogSchema>;
 interface AddTradeLogModalProps {
   isOpen: boolean;
   onClose: () => void;
+  tradeLog?: TradeLog;
   selectedStock?: StockInfo;
 }
 
-export function AddTradeLogModal({ isOpen, onClose, selectedStock: initialStock }: AddTradeLogModalProps) {
-  const { addTradeLog } = useTradeLog();
+export function AddTradeLogModal({ isOpen, onClose, tradeLog, selectedStock: initialStock }: AddTradeLogModalProps) {
+  const { addTradeLog, updateTradeLog } = useTradeLog();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
   const [isListVisible, setIsListVisible] = useState(false);
   const [isStockSelected, setIsStockSelected] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
+  const isEditMode = !!tradeLog;
+
   const form = useForm<TradeLogFormValues>({
     resolver: zodResolver(TradeLogSchema),
     defaultValues: {
-      symbol: initialStock?.symbol || '',
-      name: initialStock?.name || '',
-      buyPrice: initialStock?.price || 0,
-      buyQuantity: 1,
-      buyDate: new Date().toISOString().split('T')[0],
-      sellPrice: undefined,
-      sellQuantity: undefined,
-      sellDate: undefined,
+      buyDate: new Date(),
     },
   });
   const { reset } = form;
   
   useEffect(() => {
-    if (initialStock) {
-      reset({
-        symbol: initialStock.symbol,
-        name: initialStock.name,
-        buyPrice: initialStock.price,
-        buyQuantity: 1,
-        buyDate: new Date().toISOString().split('T')[0],
-        sellPrice: undefined,
-        sellQuantity: undefined,
-        sellDate: undefined,
-      });
-      setIsStockSelected(true);
-    } else {
-      reset({
-        symbol: '', name: '', buyPrice: 0, buyQuantity: 1, 
-        buyDate: new Date().toISOString().split('T')[0],
-        sellPrice: undefined, sellQuantity: undefined, sellDate: undefined,
-      });
-      setIsStockSelected(false);
-    }
-  }, [initialStock, reset, isOpen]);
-
-  useEffect(() => {
-    const fetchResults = async () => {
-      if (searchQuery.trim().length > 0) {
-        try {
-          const response = await fetch(`/api/stock/search/${searchQuery}`);
-          if (response.ok) {
-            const data = await response.json();
-            setSearchResults(Array.isArray(data) ? data : []);
-            setIsListVisible(true);
-          } else { setSearchResults([]); }
-        } catch (error) {
-          console.error("Search failed:", error);
-          setSearchResults([]);
-        }
+    if (isOpen) {
+      const stockToEdit = tradeLog || initialStock;
+      if (stockToEdit) {
+        reset({
+          symbol: stockToEdit.symbol,
+          name: stockToEdit.name,
+          buyPrice: 'buyPrice' in stockToEdit ? stockToEdit.buyPrice : stockToEdit.price,
+          buyQuantity: 'buyQuantity' in stockToEdit ? stockToEdit.buyQuantity : 1,
+          buyDate: 'buyDate' in stockToEdit ? new Date(stockToEdit.buyDate) : new Date(),
+          sellPrice: 'sellPrice' in stockToEdit ? stockToEdit.sellPrice : undefined,
+          sellQuantity: 'sellQuantity' in stockToEdit ? stockToEdit.sellQuantity : undefined,
+          sellDate: 'sellDate' in stockToEdit && stockToEdit.sellDate ? new Date(stockToEdit.sellDate) : undefined,
+        });
+        setIsStockSelected(true);
       } else {
-        setSearchResults([]);
-        setIsListVisible(false);
-      }
-    };
-    fetchResults();
-  }, [searchQuery]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setIsListVisible(false);
+        reset({
+          symbol: '', name: '', buyPrice: 0, buyQuantity: 1, 
+          buyDate: new Date(),
+          sellPrice: undefined, sellQuantity: undefined, sellDate: undefined,
+        });
+        setIsStockSelected(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [tradeLog, initialStock, reset, isOpen]);
 
+  const onSubmit = (data: TradeLogFormValues) => {
+    const logData = {
+      ...data,
+      buyDate: format(data.buyDate, "yyyy-MM-dd"),
+      sellDate: data.sellDate ? format(data.sellDate, "yyyy-MM-dd") : undefined,
+    };
+
+    if (isEditMode) {
+      updateTradeLog(tradeLog.id, logData);
+      toast.success("매매 기록이 수정되었습니다.");
+    } else {
+      addTradeLog(logData);
+      toast.success("매매 기록이 추가되었습니다.");
+    }
+    onClose();
+  };
+
+  // Other functions like handleStockSelect, resetStockSelection, etc. remain the same
   const handleStockSelect = (stock: StockInfo) => {
     form.setValue("name", stock.name, { shouldValidate: true });
     form.setValue("symbol", stock.symbol, { shouldValidate: true });
@@ -150,18 +133,81 @@ export function AddTradeLogModal({ isOpen, onClose, selectedStock: initialStock 
     form.setValue("buyPrice", 0);
     setIsStockSelected(false);
   };
-
-  const onSubmit = (data: TradeLogFormValues) => {
-    addTradeLog({
-      ...data,
-      sellPrice: data.sellPrice,
-      sellQuantity: data.sellQuantity,
-      sellDate: data.sellDate,
-    });
-    toast.success("매매 기록이 추가되었습니다.");
-    onClose();
-  };
   
+  const renderDateField = (name: "buyDate" | "sellDate", label: string) => (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field, fieldState: { error } }) => (
+        <FormItem className="flex flex-col">
+          <FormLabel>{label}</FormLabel>
+          <Popover>
+            <PopoverTrigger asChild>
+              <FormControl>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full pl-3 text-left font-normal",
+                    !field.value && "text-muted-foreground"
+                  )}
+                >
+                  {field.value ? (
+                    format(field.value, "yyyy-MM-dd")
+                  ) : (
+                    <span>날짜 선택</span>
+                  )}
+                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                </Button>
+              </FormControl>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={field.value}
+                onSelect={field.onChange}
+                disabled={(date) =>
+                  date > new Date() || date < new Date("1900-01-01")
+                }
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+          {error && <p className="text-sm text-red-500 mt-1">{error.message}</p>}
+        </FormItem>
+      )}
+    />
+  );
+
+  // renderPriceField and other render functions
+  const renderPriceField = (name: "buyPrice" | "sellPrice", label: string) => {
+    return (
+      <FormField
+        control={form.control}
+        name={name}
+        render={({ field, fieldState: { error } }) => {
+          const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const value = e.target.value;
+            const parsedValue = value.replace(/,/g, '');
+            field.onChange(parsedValue === '' ? undefined : parsedValue);
+          };
+          const displayValue = field.value == null || field.value === '' ? '' : Number(field.value).toLocaleString();
+          return (
+            <FormItem>
+              <FormLabel>{label}</FormLabel>
+              <FormControl>
+                <div className="flex items-center gap-2">
+                  <Input placeholder="0" type="text" {...field} value={displayValue} onChange={handleChange} />
+                  {error && (
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="flex items-center"><AlertCircle className="h-5 w-5 text-red-500" /></span></TooltipTrigger><TooltipContent><p>{error.message}</p></TooltipContent></Tooltip></TooltipProvider>
+                  )}
+                </div>
+              </FormControl>
+            </FormItem>
+          );
+        }}
+      />
+    );
+  };
   const renderFormField = (name: keyof TradeLogFormValues, label: string, readOnly: boolean = false, placeholder?: string, type: string = "text") => {
     return (
       <FormField
@@ -174,14 +220,7 @@ export function AddTradeLogModal({ isOpen, onClose, selectedStock: initialStock 
               <div className="flex items-center gap-2">
                 <Input placeholder={placeholder} type={type} {...field} value={field.value ?? ''} readOnly={readOnly} />
                 {error && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="flex items-center"><AlertCircle className="h-5 w-5 text-red-500" /></span>
-                      </TooltipTrigger>
-                      <TooltipContent><p>{error.message}</p></TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="flex items-center"><AlertCircle className="h-5 w-5 text-red-500" /></span></TooltipTrigger><TooltipContent><p>{error.message}</p></TooltipContent></Tooltip></TooltipProvider>
                 )}
               </div>
             </FormControl>
@@ -191,71 +230,29 @@ export function AddTradeLogModal({ isOpen, onClose, selectedStock: initialStock 
     );
   };
 
-  const renderPriceField = (name: "buyPrice" | "sellPrice", label: string) => {
-    return (
-      <FormField
-        control={form.control}
-        name={name}
-        render={({ field, fieldState: { error } }) => {
-          const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            const value = e.target.value;
-            const parsedValue = value.replace(/,/g, '');
-            field.onChange(parsedValue === '' ? undefined : parsedValue);
-          };
-
-          const displayValue = field.value == null || field.value === '' ? '' : Number(field.value).toLocaleString();
-
-          return (
-            <FormItem>
-              <FormLabel>{label}</FormLabel>
-              <FormControl>
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="0"
-                    type="text"
-                    {...field}
-                    value={displayValue}
-                    onChange={handleChange}
-                  />
-                  {error && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="flex items-center"><AlertCircle className="h-5 w-5 text-red-500" /></span>
-                        </TooltipTrigger>
-                        <TooltipContent><p>{error.message}</p></TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </div>
-              </FormControl>
-            </FormItem>
-          );
-        }}
-      />
-    );
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>매매 기록 추가</DialogTitle>
-          <DialogDescription>종목을 검색하여 선택한 후, 매매 내역을 입력합니다. *는 필수 항목입니다.</DialogDescription>
+          <DialogTitle>{isEditMode ? '매매 기록 수정' : '매매 기록 추가'}</DialogTitle>
+          <DialogDescription>{isEditMode ? '매매 내역을 수정합니다.' : '종목을 검색하여 선택한 후, 매매 내역을 입력합니다.'} *는 필수 항목입니다.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            {!isStockSelected ? (
+            {isStockSelected ? (
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-4 items-end">
+                {renderFormField("name", "종목명 *", true)}
+                {renderFormField("symbol", "종목코드 *", true)}
+                <Button type="button" variant="outline" onClick={resetStockSelection} disabled={isEditMode || !!initialStock}>
+                  <X className="mr-2 h-4 w-4" />
+                  종목 변경
+                </Button>
+              </div>
+            ) : (
               <Command ref={searchContainerRef} className="relative overflow-visible rounded-lg border">
                 <div className="flex items-center px-3">
                   <SearchIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                  <CommandPrimitive.Input
-                    placeholder="종목명 또는 종목코드를 검색하세요..."
-                    value={searchQuery}
-                    onValueChange={setSearchQuery}
-                    onFocus={() => searchQuery.length > 0 && setIsListVisible(true)}
-                    className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none"
-                  />
+                  <CommandPrimitive.Input placeholder="종목명 또는 종목코드를 검색하세요..." value={searchQuery} onValueChange={setSearchQuery} onFocus={() => searchQuery.length > 0 && setIsListVisible(true)} className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none" />
                 </div>
                 {isListVisible && (
                   <CommandList className="absolute top-full z-50 mt-1 w-full rounded-b-md border bg-popover text-popover-foreground shadow-md">
@@ -273,26 +270,17 @@ export function AddTradeLogModal({ isOpen, onClose, selectedStock: initialStock 
                   </CommandList>
                 )}
               </Command>
-            ) : (
-              <div className="grid grid-cols-[1fr_1fr_auto] gap-4 items-end">
-                {renderFormField("name", "종목명 *", true)}
-                {renderFormField("symbol", "종목코드 *", true)}
-                <Button type="button" variant="outline" onClick={resetStockSelection} disabled={!!initialStock}>
-                  <X className="mr-2 h-4 w-4" />
-                  종목 변경
-                </Button>
-              </div>
             )}
             
             <div className="grid grid-cols-3 gap-4">
               {renderPriceField("buyPrice", "매수가 *")}
               {renderFormField("buyQuantity", "매수량 *", false, undefined, "number")}
-              {renderFormField("buyDate", "매수일 *", false, "YYYY-MM-DD")}
+              {renderDateField("buyDate", "매수일 *")}
             </div>
             <div className="grid grid-cols-3 gap-4">
               {renderPriceField("sellPrice", "매도가")}
               {renderFormField("sellQuantity", "매도량", false, undefined, "number")}
-              {renderFormField("sellDate", "매도일", false, "YYYY-MM-DD")}
+              {renderDateField("sellDate", "매도일")}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>취소</Button>

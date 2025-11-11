@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { useTradeLog } from '@/contexts/trade-log-context';
+import { useTradeLog, TradeLog } from '@/contexts/trade-log-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,27 +11,37 @@ import { AddTradeLogModal } from '@/components/trades/add-trade-log-modal';
 
 export default function MistakesPage() {
   const { tradeLogs, deleteTradeLog } = useTradeLog();
-  const [isAddModalOpen, setAddModalOpen] = useState(false);
-  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<TradeLog | undefined>(undefined);
 
   const handleDelete = (id: string) => {
     deleteTradeLog(id);
     toast.error("매매 기록을 삭제했습니다.");
   };
   
-  const handleEdit = (id: string) => {
-    setEditingLogId(id);
-    // TODO: Implement edit functionality by opening a pre-filled modal
-    toast.info("수정 기능은 곧 구현될 예정입니다.");
+  const handleEdit = (log: TradeLog) => {
+    setSelectedLog(log);
+    setModalOpen(true);
   };
+
+  const handleAdd = () => {
+    setSelectedLog(undefined);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setSelectedLog(undefined);
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-lg font-bold">매매 복기 노트</h1>
+          <h1 className="text-2xl font-bold">매매 복기 노트</h1>
+          <p className="text-muted-foreground">자신의 매매를 기록하고 분석하여 성장하세요.</p>
         </div>
-        <Button onClick={() => setAddModalOpen(true)}>
+        <Button onClick={handleAdd}>
           <PlusCircle className="mr-2 h-4 w-4" />
           직접 입력
         </Button>
@@ -76,7 +86,7 @@ export default function MistakesPage() {
                         {profitRate != null ? `${profitRate.toFixed(2)}%` : 'N/A'}
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(log.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(log)}>
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDelete(log.id)}>
@@ -97,8 +107,9 @@ export default function MistakesPage() {
       </Card>
       
       <AddTradeLogModal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setAddModalOpen(false)} 
+        isOpen={modalOpen} 
+        onClose={closeModal}
+        tradeLog={selectedLog}
       />
     </div>
   );
