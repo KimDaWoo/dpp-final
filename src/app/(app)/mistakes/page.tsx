@@ -6,11 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from "sonner";
-import { Trash2, Edit, PlusCircle } from 'lucide-react';
+import { Trash2, Edit, PlusCircle, MinusCircle, DollarSign, JapaneseYen } from 'lucide-react';
 import { AddTradeLogModal } from '@/components/trades/add-trade-log-modal';
+import { cn } from "@/lib/utils";
+import { useCurrency } from '@/contexts/currency-context';
 
 export default function MistakesPage() {
   const { tradeLogs, deleteTradeLog } = useTradeLog();
+  const { currency, exchangeRate } = useCurrency();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<TradeLog | undefined>(undefined);
 
@@ -34,12 +37,39 @@ export default function MistakesPage() {
     setSelectedLog(undefined);
   }
 
+  const NoDataIcon = () => <MinusCircle className="h-4 w-4 text-muted-foreground mx-auto" />;
+
+  const formatNumber = (value: number | null | undefined) => {
+    if (value === null || value === undefined) return null;
+    
+    let displayValue = value;
+    if (currency === 'USD' && exchangeRate) {
+      displayValue = value / exchangeRate;
+    }
+    
+    return Number(displayValue).toLocaleString(undefined, { 
+      maximumFractionDigits: currency === 'USD' ? 2 : 0 
+    });
+  };
+
+  const CurrencyHeader = ({ title }: { title: string }) => (
+    <div className="flex items-center justify-center gap-2">
+      <span>{title}</span>
+      <div className="flex items-center justify-center p-1 rounded-md bg-muted text-muted-foreground">
+        {currency === 'KRW' ? (
+          <span className="font-sans font-semibold text-xs">₩</span>
+        ) : (
+          <DollarSign className="h-3 w-3" />
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold">매매 복기 노트</h1>
-          <p className="text-muted-foreground">자신의 매매를 기록하고 분석하여 성장하세요.</p>
+          <h1 className="text-lg font-bold">매매 복기 노트</h1>
         </div>
         <Button onClick={handleAdd}>
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -57,13 +87,12 @@ export default function MistakesPage() {
               <TableRow>
                 <TableHead>종목명</TableHead>
                 <TableHead>매수일</TableHead>
-                <TableHead>매수가</TableHead>
-                <TableHead>매수량</TableHead>
-                <TableHead>매도일</TableHead>
-                <TableHead>매도가</TableHead>
-                <TableHead>매도량</TableHead>
-                <TableHead>수익률</TableHead>
-                <TableHead className="text-right">관리</TableHead>
+                <TableHead className="text-center"><CurrencyHeader title="매수가" /></TableHead>
+                <TableHead className="text-center">매수량</TableHead>
+                <TableHead className="text-center">매도일</TableHead>
+                <TableHead className="text-center"><CurrencyHeader title="매도가" /></TableHead>
+                <TableHead className="text-center">매도량</TableHead>
+                <TableHead className="text-center">수익률</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -77,13 +106,13 @@ export default function MistakesPage() {
                     <TableRow key={log.id}>
                       <TableCell className="font-medium">{log.name} ({log.symbol})</TableCell>
                       <TableCell>{log.buyDate}</TableCell>
-                      <TableCell>{log.buyPrice.toLocaleString()}원</TableCell>
-                      <TableCell>{log.buyQuantity}</TableCell>
-                      <TableCell>{log.sellDate || 'N/A'}</TableCell>
-                      <TableCell>{log.sellPrice != null ? `${log.sellPrice.toLocaleString()}원` : 'N/A'}</TableCell>
-                      <TableCell>{log.sellQuantity || 'N/A'}</TableCell>
-                      <TableCell className={profitColor}>
-                        {profitRate != null ? `${profitRate.toFixed(2)}%` : 'N/A'}
+                      <TableCell className="text-center">{formatNumber(log.buyPrice)}</TableCell>
+                      <TableCell className="text-center">{log.buyQuantity}</TableCell>
+                      <TableCell className="text-center">{log.sellDate || <NoDataIcon />}</TableCell>
+                      <TableCell className="text-center">{formatNumber(log.sellPrice) || <NoDataIcon />}</TableCell>
+                      <TableCell className="text-center">{log.sellQuantity || <NoDataIcon />}</TableCell>
+                      <TableCell className={cn("text-center", profitColor)}>
+                        {profitRate != null ? `${profitRate.toFixed(2)}%` : <NoDataIcon />}
                       </TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(log)}>

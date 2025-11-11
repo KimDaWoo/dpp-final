@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { toast } from "sonner";
 import { StockInfo } from "@/lib/stock-utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, SearchIcon, X, CalendarIcon } from "lucide-react";
+import { AlertCircle, SearchIcon, X, CalendarIcon, DollarSign } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Command as CommandPrimitive } from "cmdk";
 import { Badge } from "../ui/badge";
@@ -20,31 +20,55 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useCurrency } from "@/contexts/currency-context";
 
 // Zod 스키마 정의
 const TradeLogSchema = z.object({
   symbol: z.string().min(1, "종목을 검색하여 선택해주세요."),
-  name: z.string().min(1, "종목을 검색하여 선택해주세요."),
+  name: z.string().min(1, "종목명을 입력해주세요."),
   buyPrice: z.coerce.number().min(0, "매수가는 0 이상이어야 합니다."),
   buyQuantity: z.coerce.number().int().min(1, "매수량은 1 이상이어야 합니다."),
   buyDate: z.date({ required_error: "매수일을 선택해주세요."}),
   
   sellPrice: z.preprocess(
-    (val) => (val === "" ? undefined : val),
+    (val) => (val === "" || val === undefined ? undefined : val),
     z.coerce.number({ invalid_type_error: "숫자를 입력해주세요." }).min(0, "매도가는 0 이상이어야 합니다.").optional()
   ),
   sellQuantity: z.preprocess(
-    (val) => (val === "" ? undefined : val),
+    (val) => (val === "" || val === undefined ? undefined : val),
     z.coerce.number({ invalid_type_error: "숫자를 입력해주세요." }).int().min(1, "매도량은 1 이상이어야 합니다.").optional()
   ),
-  sellDate: z.date().optional(),
-}).refine(data => {
+  sellDate: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : val),
+    z.date().optional()
+  ),
+}).superRefine((data, ctx) => {
   const sellFields = [data.sellPrice, data.sellQuantity, data.sellDate];
   const filledSellFields = sellFields.filter(field => field !== undefined).length;
-  return filledSellFields === 0 || filledSellFields === 3;
-}, {
-  message: "매도 관련 정보(가격, 수량, 날짜)는 모두 입력하거나 모두 비워두어야 합니다.",
-  path: ["sellPrice"], 
+  
+  if (filledSellFields > 0 && filledSellFields < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "매도 관련 정보는 모두 입력하거나 모두 비워두어야 합니다.",
+      path: ["sellPrice"],
+    });
+  }
+
+  if (data.sellQuantity !== undefined && data.buyQuantity !== undefined && data.sellQuantity > data.buyQuantity) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "매도량은 매수량보다 많을 수 없습니다.",
+      path: ["sellQuantity"],
+    });
+  }
+
+  if (data.buyDate && data.sellDate && data.sellDate < data.buyDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "매도일은 매수일보다 이전일 수 없습니다.",
+      path: ["sellDate"],
+    });
+  }
 });
 
 type TradeLogFormValues = z.infer<typeof TradeLogSchema>;
@@ -58,6 +82,7 @@ interface AddTradeLogModalProps {
 
 export function AddTradeLogModal({ isOpen, onClose, tradeLog, selectedStock: initialStock }: AddTradeLogModalProps) {
   const { addTradeLog, updateTradeLog } = useTradeLog();
+  const { currency, exchangeRate } = useCurrency();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
   const [isListVisible, setIsListVisible] = useState(false);
@@ -68,14 +93,15 @@ export function AddTradeLogModal({ isOpen, onClose, tradeLog, selectedStock: ini
 
   const form = useForm<TradeLogFormValues>({
     resolver: zodResolver(TradeLogSchema),
-    defaultValues: {
-      buyDate: new Date(),
-    },
+    mode: "onChange",
+    defaultValues: { buyDate: new Date() },
   });
-  const { reset } = form;
+  const { reset, formState: { isValid }, watch } = form;
   
+  const watchedBuyDate = watch("buyDate");
+
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && exchangeRate) {
       const stockToEdit = tradeLog || initialStock;
       if (stockToEdit) {
         reset({
@@ -98,11 +124,22 @@ export function AddTradeLogModal({ isOpen, onClose, tradeLog, selectedStock: ini
         setIsStockSelected(false);
       }
     }
-  }, [tradeLog, initialStock, reset, isOpen]);
+  }, [tradeLog, initialStock, reset, isOpen, exchangeRate]);
 
   const onSubmit = (data: TradeLogFormValues) => {
+    if (!exchangeRate) {
+      toast.error("환율 정보가 로드되지 않았습니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
+    // Convert prices back to KRW before saving
+    const buyPriceInKRW = currency === 'USD' ? data.buyPrice * exchangeRate : data.buyPrice;
+    const sellPriceInKRW = data.sellPrice !== undefined ? (currency === 'USD' ? data.sellPrice * exchangeRate : data.sellPrice) : undefined;
+
     const logData = {
       ...data,
+      buyPrice: buyPriceInKRW,
+      sellPrice: sellPriceInKRW,
       buyDate: format(data.buyDate, "yyyy-MM-dd"),
       sellDate: data.sellDate ? format(data.sellDate, "yyyy-MM-dd") : undefined,
     };
@@ -117,7 +154,61 @@ export function AddTradeLogModal({ isOpen, onClose, tradeLog, selectedStock: ini
     onClose();
   };
 
-  // Other functions like handleStockSelect, resetStockSelection, etc. remain the same
+  const renderPriceField = (name: "buyPrice" | "sellPrice", label: string) => {
+    return (
+      <FormField
+        control={form.control}
+        name={name}
+        render={({ field, fieldState: { error } }) => {
+          const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const value = e.target.value;
+            const parsedValue = value.replace(/,/g, '');
+            field.onChange(parsedValue === '' ? undefined : parseFloat(parsedValue));
+          };
+
+          let displayValue = field.value;
+          if (currency === 'USD' && exchangeRate && typeof displayValue === 'number') {
+            displayValue = displayValue / exchangeRate;
+          }
+          
+          const formattedDisplayValue = displayValue == null || displayValue === '' ? '' : Number(displayValue).toLocaleString(undefined, { 
+            minimumFractionDigits: currency === 'USD' ? 2 : 0,
+            maximumFractionDigits: currency === 'USD' ? 2 : 0
+          });
+
+          return (
+            <FormItem>
+              <FormLabel>{label}</FormLabel>
+              <FormControl>
+                <div className="relative flex items-center">
+                  <Input 
+                    placeholder="0" 
+                    type="text" 
+                    {...field} 
+                    value={formattedDisplayValue} 
+                    onChange={handleChange} 
+                    className="pr-8" // 아이콘 공간 확보
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-muted-foreground">
+                    {currency === 'KRW' ? (
+                      <span className="font-sans font-semibold text-xs">₩</span>
+                    ) : (
+                      <DollarSign className="h-3 w-3" />
+                    )}
+                  </div>
+                  {error && (
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="flex items-center"><AlertCircle className="h-5 w-5 text-red-500" /></span></TooltipTrigger><TooltipContent><p>{error.message}</p></TooltipContent></Tooltip></TooltipProvider>
+                  )}
+                </div>
+              </FormControl>
+            </FormItem>
+          );
+        }}
+      />
+    );
+  };
+
+  // Other render functions remain the same
   const handleStockSelect = (stock: StockInfo) => {
     form.setValue("name", stock.name, { shouldValidate: true });
     form.setValue("symbol", stock.symbol, { shouldValidate: true });
@@ -165,9 +256,15 @@ export function AddTradeLogModal({ isOpen, onClose, tradeLog, selectedStock: ini
                 mode="single"
                 selected={field.value}
                 onSelect={field.onChange}
-                disabled={(date) =>
-                  date > new Date() || date < new Date("1900-01-01")
-                }
+                disabled={(date) => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const minDate = name === 'sellDate' && watchedBuyDate ? new Date(watchedBuyDate) : new Date("1900-01-01");
+                  if (name === 'sellDate' && watchedBuyDate) {
+                    minDate.setHours(0, 0, 0, 0);
+                  }
+                  return date > today || date < minDate;
+                }}
                 initialFocus
               />
             </PopoverContent>
@@ -177,37 +274,7 @@ export function AddTradeLogModal({ isOpen, onClose, tradeLog, selectedStock: ini
       )}
     />
   );
-
-  // renderPriceField and other render functions
-  const renderPriceField = (name: "buyPrice" | "sellPrice", label: string) => {
-    return (
-      <FormField
-        control={form.control}
-        name={name}
-        render={({ field, fieldState: { error } }) => {
-          const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            const value = e.target.value;
-            const parsedValue = value.replace(/,/g, '');
-            field.onChange(parsedValue === '' ? undefined : parsedValue);
-          };
-          const displayValue = field.value == null || field.value === '' ? '' : Number(field.value).toLocaleString();
-          return (
-            <FormItem>
-              <FormLabel>{label}</FormLabel>
-              <FormControl>
-                <div className="flex items-center gap-2">
-                  <Input placeholder="0" type="text" {...field} value={displayValue} onChange={handleChange} />
-                  {error && (
-                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="flex items-center"><AlertCircle className="h-5 w-5 text-red-500" /></span></TooltipTrigger><TooltipContent><p>{error.message}</p></TooltipContent></Tooltip></TooltipProvider>
-                  )}
-                </div>
-              </FormControl>
-            </FormItem>
-          );
-        }}
-      />
-    );
-  };
+  
   const renderFormField = (name: keyof TradeLogFormValues, label: string, readOnly: boolean = false, placeholder?: string, type: string = "text") => {
     return (
       <FormField
@@ -284,7 +351,7 @@ export function AddTradeLogModal({ isOpen, onClose, tradeLog, selectedStock: ini
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>취소</Button>
-              <Button type="submit">저장</Button>
+              <Button type="submit" disabled={!isValid}>저장</Button>
             </DialogFooter>
           </form>
         </Form>
