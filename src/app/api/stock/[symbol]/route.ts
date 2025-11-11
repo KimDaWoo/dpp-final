@@ -20,12 +20,20 @@ export async function GET(
     const csvData = await findStockInCsv(symbol, exchange);
     const kisData = await getStockDetails(symbol);
 
-    console.log(`[KIS API Raw Response for ${symbol}]:`, JSON.stringify(kisData, null, 2));
+    const parseFloatWithComma = (value: string) => {
+      if (typeof value !== 'string') return 0;
+      return parseFloat(value.replace(/,/g, '')) || 0;
+    };
+    
+    const parseIntWithComma = (value: string) => {
+        if (typeof value !== 'string') return 0;
+        return parseInt(value.replace(/,/g, ''), 10) || 0;
+    }
 
-    const currentPrice = parseFloat(kisData.stck_prpr) || 0;
-    const listedStockCount = parseInt(kisData.lstn_stcn, 10) || 0;
+    const currentPrice = parseFloatWithComma(kisData.stck_prpr);
+    const listedStockCount = parseIntWithComma(kisData.lstn_stcn);
     const marketCap = currentPrice * listedStockCount;
-    const dps = parseFloat(kisData.dps) || 0;
+    const dps = parseFloatWithComma(kisData.dps);
 
     const mappedData = {
       // --- 기본 정보 ---
@@ -36,16 +44,16 @@ export async function GET(
       MarketCapitalization: marketCap,
       Symbol: symbol,
       CurrentPrice: currentPrice,
-      W52High: parseFloat(kisData.w52_hgpr) || 0,
-      W52Low: parseFloat(kisData.w52_lwpr) || 0,
+      W52High: parseFloatWithComma(kisData.w52_hgpr),
+      W52Low: parseFloatWithComma(kisData.w52_lwpr),
       DividendYield: currentPrice > 0 && dps > 0 ? dps / currentPrice : 0,
 
       // --- 최종 6개 지표 ---
-      PER: parseFloat(kisData.per) || 0,
-      PBR: parseFloat(kisData.pbr) || 0,
-      EPS: parseFloat(kisData.eps) || 0,
-      BPS: parseFloat(kisData.bps) || 0,
-      FOREIGNER_RATIO: parseFloat(kisData.hts_frgn_ehrt) || 0,
+      PER: parseFloatWithComma(kisData.per),
+      PBR: parseFloatWithComma(kisData.pbr),
+      EPS: parseFloatWithComma(kisData.eps),
+      BPS: parseFloatWithComma(kisData.bps),
+      FOREIGNER_RATIO: parseFloatWithComma(kisData.hts_frgn_ehrt),
     };
     
     return NextResponse.json(mappedData);

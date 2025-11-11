@@ -18,6 +18,9 @@ import { SearchIcon, Star } from "lucide-react";
 import { useFavorites } from "@/contexts/favorites-context";
 import { StockInfo } from "@/lib/stock-utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TradeConfirmationModal } from "./trade-confirmation-modal";
+import { AddTradeLogModal } from "./add-trade-log-modal";
+import { toast } from "sonner";
 
 interface SelectedStockInfo {
   symbol: string;
@@ -33,6 +36,7 @@ interface StockSearchProps {
 
 const exchanges = ['전체', 'KOSPI', 'KOSDAQ', 'KONEX', 'ELW'] as const;
 type ExchangeType = typeof exchanges[number];
+const DONT_ASK_AGAIN_KEY = 'tradeLogDontAskAgain';
 
 export function StockSearch({ 
   selectedStock, 
@@ -43,11 +47,77 @@ export function StockSearch({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<StockInfo[]>([]);
   const [selectedStockInfo, setSelectedStockInfo] = useState<StockInfo | null>(null);
+  const [stockForLog, setStockForLog] = useState<StockInfo | undefined>(undefined);
   const [isListVisible, setIsListVisible] = useState(false);
   const [selectedExchange, setSelectedExchange] = useState<ExchangeType>('전체');
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [isConfirmationOpen, setConfirmationOpen] = useState(false);
+  const [isAddLogOpen, setAddLogOpen] = useState(false);
+
+  const openTossPage = () => {
+    if (!selectedStock?.symbol) return;
+    const url = `https://www.tossinvest.com/stocks/A${selectedStock.symbol}`;
+    window.open(url, '_blank');
+  };
+
+  const fetchPriceAndOpenAddModal = async () => {
+    if (!selectedStock?.symbol) return;
+    
+    openTossPage(); // 토스 페이지를 먼저 엽니다.
+
+    const loadingToast = toast.loading("현재가를 조회중입니다...");
+    try {
+      const response = await fetch(`/api/stock/${selectedStock.symbol}`);
+      if (response.ok) {
+        const details = await response.json();
+        const stockWithCurrentPrice: StockInfo = {
+          symbol: details.Symbol,
+          name: details.Name,
+          exchange: selectedStockInfo?.exchange || '',
+          price: details.CurrentPrice
+        };
+        setStockForLog(stockWithCurrentPrice);
+        toast.success("현재가 조회가 완료되었습니다.", { id: loadingToast });
+      } else {
+        throw new Error("API fetching failed");
+      }
+    } catch (error) {
+      console.error("Failed to fetch current price:", error);
+      toast.error("현재가 조회에 실패했습니다. 기존 정보로 기록합니다.", { id: loadingToast });
+      setStockForLog(selectedStockInfo || undefined);
+    } finally {
+      setAddLogOpen(true);
+    }
+  };
+
+  const handleTradeButtonClick = () => {
+    const preference = localStorage.getItem(DONT_ASK_AGAIN_KEY);
+    if (preference === 'always_save') {
+      fetchPriceAndOpenAddModal();
+    } else if (preference === 'always_skip') {
+      openTossPage();
+    } else {
+      setConfirmationOpen(true);
+    }
+  };
+
+  const handleConfirmAndSave = (dontAskAgain: boolean) => {
+    if (dontAskAgain) {
+      localStorage.setItem(DONT_ASK_AGAIN_KEY, 'always_save');
+    }
+    setConfirmationOpen(false);
+    fetchPriceAndOpenAddModal();
+  };
+
+  const handleDeclineAndSkip = (dontAskAgain: boolean) => {
+    if (dontAskAgain) {
+      localStorage.setItem(DONT_ASK_AGAIN_KEY, 'always_skip');
+    }
+    setConfirmationOpen(false);
+    openTossPage();
+  };
 
   useEffect(() => {
     const searchStocks = async () => {
@@ -59,12 +129,8 @@ export function StockSearch({
             if (Array.isArray(data)) {
               setResults(data);
               setIsListVisible(true);
-            } else {
-              setResults([]);
-            }
-          } else {
-            setResults([]);
-          }
+            } else { setResults([]); }
+          } else { setResults([]); }
         } catch (error) {
           console.error("Failed to fetch search results:", error);
           setResults([]);
@@ -74,7 +140,6 @@ export function StockSearch({
         setIsListVisible(false);
       }
     };
-    
     searchStocks();
   }, [query, selectedExchange]);
 
@@ -85,15 +150,13 @@ export function StockSearch({
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [searchContainerRef]);
 
   useEffect(() => {
     if (!isModalOpen) {
       setSelectedStockInfo(null);
-      setAnalysisResult(null); // 모달이 닫힐 때 분석 결과도 초기화
+      setAnalysisResult(null);
     }
   }, [isModalOpen]);
   
@@ -105,7 +168,6 @@ export function StockSearch({
             const apiUrl = selectedStock.exchange
               ? `/api/stock/search/${selectedStock.symbol}?exchange=${selectedStock.exchange}`
               : `/api/stock/search/${selectedStock.symbol}`;
-            
             const response = await fetch(apiUrl);
             if (response.ok) {
               const data = await response.json();
@@ -124,7 +186,6 @@ export function StockSearch({
     }
   }, [isModalOpen, selectedStock, selectedStockInfo]);
 
-
   const handleLocalSelect = (stock: StockInfo) => {
     setSelectedStockInfo(stock);
     onSelectStock(stock.symbol);
@@ -134,25 +195,14 @@ export function StockSearch({
 
   const handleFavoriteToggle = () => {
     if (!selectedStock?.symbol) return;
-    if (isFavorite(selectedStock.symbol)) {
-      removeFavorite(selectedStock.symbol);
-    } else {
-      addFavorite(selectedStock.symbol);
-    }
+    if (isFavorite(selectedStock.symbol)) removeFavorite(selectedStock.symbol);
+    else addFavorite(selectedStock.symbol);
   };
 
   const TradeButton = () => {
     const isDisabled = !analysisResult?.isPass;
     const button = (
-       <Button 
-          className="w-full sm:w-auto" 
-          onClick={() => {
-            if (!selectedStock?.symbol) return;
-            const url = `https://www.tossinvest.com/stocks/A${selectedStock.symbol}`;
-            window.open(url, '_blank');
-          }}
-          disabled={isDisabled}
-        >
+       <Button className="w-full sm:w-auto" onClick={handleTradeButtonClick} disabled={isDisabled}>
           거래하러 가기
         </Button>
     );
@@ -161,12 +211,8 @@ export function StockSearch({
       return (
         <TooltipProvider>
           <Tooltip>
-            <TooltipTrigger asChild>
-              <span>{button}</span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>투자 성향 기준을 만족하지 못했습니다.</p>
-            </TooltipContent>
+            <TooltipTrigger asChild><span>{button}</span></TooltipTrigger>
+            <TooltipContent><p>투자 성향 기준을 만족하지 못했습니다.</p></TooltipContent>
           </Tooltip>
         </TooltipProvider>
       );
@@ -179,12 +225,7 @@ export function StockSearch({
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           {exchanges.map(exchange => (
-            <Button
-              key={exchange}
-              variant={selectedExchange === exchange ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setSelectedExchange(exchange)}
-            >
+            <Button key={exchange} variant={selectedExchange === exchange ? 'secondary' : 'ghost'} size="sm" onClick={() => setSelectedExchange(exchange)}>
               {exchange}
             </Button>
           ))}
@@ -205,21 +246,14 @@ export function StockSearch({
               {results.length > 0 ? (
                 <CommandGroup>
                   {results.map((stock) => (
-                    <CommandItem
-                      key={`${stock.symbol}-${stock.exchange}`}
-                      onSelect={() => handleLocalSelect(stock)}
-                      value={`${stock.name} ${stock.symbol}`}
-                      className="py-2"
-                    >
+                    <CommandItem key={`${stock.symbol}-${stock.exchange}`} onSelect={() => handleLocalSelect(stock)} value={`${stock.name} ${stock.symbol}`} className="py-2">
                       <span>{stock.name}</span>
                       <Badge variant="outline" className="ml-2">{stock.exchange}</Badge>
                       <span className="ml-auto text-xs text-muted-foreground">{stock.symbol}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
-              ) : (
-                <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
-              )}
+              ) : ( <CommandEmpty>검색 결과가 없습니다.</CommandEmpty> )}
             </CommandList>
           )}
         </Command>
@@ -241,32 +275,36 @@ export function StockSearch({
             </div>
           </DialogHeader>
           <div className="flex flex-col gap-4 flex-1 overflow-y-auto pt-2">
-            <div className="h-[400px]">
-              <StockChart symbol={selectedStock?.symbol ?? null} />
-            </div>
-            <div className="h-full">
-              <StockAnalysis 
-                symbol={selectedStock?.symbol ?? null}
-                onAnalysisComplete={setAnalysisResult}
-              />
-            </div>
+            <div className="h-[400px]"><StockChart symbol={selectedStock?.symbol ?? null} /></div>
+            <div className="h-full"><StockAnalysis symbol={selectedStock?.symbol ?? null} onAnalysisComplete={setAnalysisResult} /></div>
           </div>
           <DialogFooter className="pt-4 sm:justify-between items-center">
             <div className="text-sm text-muted-foreground">
               {analysisResult && analysisResult.totalCount > 0 && (
-                <p>
-                  지표 만족률: 
-                  <span className={`font-bold ${analysisResult.isPass ? 'text-green-500' : 'text-red-500'}`}>
-                    {` ${analysisResult.passedCount} / ${analysisResult.totalCount}`}
-                  </span>
-                  {` (${Math.round((analysisResult.passedCount / analysisResult.totalCount) * 100)}%)`}
-                </p>
+                <p>지표 만족률: <span className={`font-bold ${analysisResult.isPass ? 'text-green-500' : 'text-red-500'}`}>{` ${analysisResult.passedCount} / ${analysisResult.totalCount}`}</span>{` (${Math.round((analysisResult.passedCount / analysisResult.totalCount) * 100)}%)`}</p>
               )}
             </div>
             <TradeButton />
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TradeConfirmationModal 
+        isOpen={isConfirmationOpen}
+        onClose={() => handleDeclineAndSkip(false)}
+        onConfirm={handleConfirmAndSave}
+      />
+
+      {isAddLogOpen && (
+        <AddTradeLogModal
+          isOpen={isAddLogOpen}
+          onClose={() => {
+            setAddLogOpen(false);
+            // openTossPage(); // 이제 모달이 열릴 때 토스 페이지를 엽니다.
+          }}
+          selectedStock={stockForLog}
+        />
+      )}
     </>
   );
 }

@@ -8,6 +8,7 @@ import { auth } from "@/auth";
 import { FavoritesProvider } from "@/contexts/favorites-context";
 import { IndicatorPreferenceProvider } from "@/contexts/indicator-preference-context";
 import { InvestmentPersonalityProvider } from "@/contexts/investment-personality-context";
+import { TradeLogProvider } from "@/contexts/trade-log-context";
 
 export default async function AppLayout({
   children,
@@ -42,7 +43,9 @@ export default async function AppLayout({
           <FavoritesProvider>
             <IndicatorPreferenceProvider>
               <InvestmentPersonalityProvider>
-                {children}
+                <TradeLogProvider>
+                  {children}
+                </TradeLogProvider>
               </InvestmentPersonalityProvider>
             </IndicatorPreferenceProvider>
           </FavoritesProvider>
