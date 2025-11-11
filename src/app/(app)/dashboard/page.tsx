@@ -19,6 +19,7 @@ import { useInvestmentPersonality } from "@/contexts/investment-personality-cont
 import { OnboardingModal } from "@/components/survey/onboarding-modal";
 import { Inbox, Star } from "lucide-react";
 import { toast } from "sonner";
+import { InterestRateDisplay } from "@/components/dashboard/interest-rate-display";
 
 // StockSearch 컴포넌트는 모달을 포함하고 있으며, SSR을 비활성화해야 합니다.
 const StockSearch = dynamic(
@@ -201,6 +202,7 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+        <InterestRateDisplay />
       </div>
     </>
   );

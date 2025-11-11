@@ -1,137 +1,118 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Card,
   CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { useInvestmentPersonality } from "@/contexts/investment-personality-context";
+import {
+  useInvestmentPersonality,
+  InvestmentPersonality,
+} from "@/contexts/investment-personality-context";
 
-const quizQuestions = [
+const questions = [
   {
-    question: "투자 원금이 50% 손실될 경우 어떻게 대응하시겠습니까?",
+    question: "투자에 대한 나의 지식수준은?",
     options: [
-      { text: "즉시 손절하여 추가 손실을 막는다.", score: -1 },
-      { text: "기다렸다가 원금이 회복되면 매도한다.", score: 0 },
-      { text: "오히려 좋은 기회라 생각하고 추가 매수한다.", score: 1 },
+      { text: "금융투자상품에 투자해 본 경험이 거의 없으며, 지식이 부족하다.", score: 1 },
+      { text: "주식, 펀드 등 금융투자상품의 구조 및 위험을 일정 수준 이해하고 있다.", score: 3 },
+      { text: "금융투자상품에 대한 충분한 이해와 투자를 위한 지식을 갖추고 있다.", score: 5 },
     ],
   },
   {
-    question: "다음 중 가장 선호하는 투자 방식은 무엇입니까?",
+    question: "나의 총 자산 중 금융상품이 차지하는 비중은?",
     options: [
-      { text: "은행 예금처럼 안정적이지만 수익률이 낮은 상품", score: -1 },
-      {
-        text: "어느 정도의 위험을 감수하는 시장 평균 수익률의 인덱스 펀드",
-        score: 0,
-      },
-      {
-        text: "높은 위험을 감수하더라도 큰 수익을 기대할 수 있는 개별 성장주",
-        score: 1,
-      },
+      { text: "10% 미만", score: 1 },
+      { text: "10% 이상 50% 미만", score: 3 },
+      { text: "50% 이상", score: 5 },
     ],
   },
   {
-    question: "투자를 결정할 때 가장 중요하게 생각하는 요소는 무엇입니까?",
+    question: "투자 원금에 손실이 발생할 경우 나의 태도는?",
     options: [
-      { text: "회사의 재무 안정성 및 배당", score: -1 },
-      { text: "현재 시장의 트렌드와 인기", score: 1 },
-      { text: "둘 다 적절히 고려한다.", score: 0 },
+      { text: "원금 손실은 절대 용납할 수 없다.", score: 1 },
+      { text: "투자 원금 손실을 감수할 수 있으며, 손실이 발생해도 추가 투자가 가능하다.", score: 3 },
+      { text: "기대수익이 높다면 위험이 높아도 상관없다.", score: 5 },
+    ],
+  },
+  {
+    question: "투자로 인한 손실 감내 수준은?",
+    options: [
+      { text: "5% 미만", score: 1 },
+      { text: "5% 이상 15% 미만", score: 3 },
+      { text: "15% 이상", score: 5 },
     ],
   },
 ];
 
-interface InvestmentPersonalityQuizProps {
+interface QuizProps {
   onComplete: () => void;
   initialAnswers?: (number | null)[];
 }
 
-export function InvestmentPersonalityQuiz({
-  onComplete,
-  initialAnswers,
-}: InvestmentPersonalityQuizProps) {
-  const { setPersonality } = useInvestmentPersonality();
-  const [answers, setAnswers] = useState<(number | null)[]>([null, null, null]);
+export function InvestmentPersonalityQuiz({ onComplete, initialAnswers }: QuizProps) {
+  const [answers, setAnswers] = useState<(number | null)[]>(initialAnswers || Array(questions.length).fill(null));
+  const { setPersonalityData } = useInvestmentPersonality();
 
-  useEffect(() => {
-    // initialAnswers가 유효한 배열일 경우에만 상태를 업데이트합니다.
-    if (initialAnswers && initialAnswers.length === quizQuestions.length) {
-      setAnswers(initialAnswers);
-    }
-  }, [initialAnswers]);
-
-  const handleAnswerChange = (questionIndex: number, score: number) => {
+  const handleAnswer = (questionIndex: number, score: number) => {
     const newAnswers = [...answers];
     newAnswers[questionIndex] = score;
     setAnswers(newAnswers);
   };
 
-  const handleSubmit = () => {
-    if (answers.includes(null)) {
-      toast.error("모든 질문에 답변해주세요.");
-      return;
-    }
+  const calculatePersonality = () => {
+    const totalScore = answers.reduce((acc, val) => (acc ?? 0) + (val || 0), 0) ?? 0;
+    let personality: InvestmentPersonality;
 
-    // 이 지점부터 answers는 number[] 타입임을 단언할 수 있습니다.
-    const validAnswers = answers as number[];
-    const totalScore = validAnswers.reduce((acc, val) => acc + val, 0);
-    
-    let personality: "aggressive" | "moderate" | "conservative";
-    if (totalScore >= 2) {
-      personality = "aggressive";
-    } else if (totalScore <= -2) {
+    if (totalScore <= 8) {
       personality = "conservative";
-    } else {
+    } else if (totalScore <= 16) {
       personality = "moderate";
+    } else {
+      personality = "aggressive";
     }
-
-    setPersonality(personality, validAnswers);
-    toast.success(
-      `분석 완료! 회원님은 '${
-        personality === "aggressive"
-          ? "공격적"
-          : personality === "moderate"
-          ? "중립적"
-          : "보수적"
-      }' 투자자입니다.`
-    );
+    
+    setPersonalityData(answers, personality);
     onComplete();
   };
 
+  const isAllAnswered = answers.every((answer) => answer !== null);
+
   return (
-    <Card className="w-full border-0 shadow-none">
-      <CardContent className="space-y-8 pt-6">
-        {quizQuestions.map((q, index) => (
-          <div key={index}>
-            <p className="font-semibold mb-4">
-              {index + 1}. {q.question}
-            </p>
-            <RadioGroup
-              value={answers[index]?.toString()}
-              onValueChange={(value) => handleAnswerChange(index, parseInt(value))}
-            >
-              {q.options.map((opt, optIndex) => (
-                <div
-                  key={optIndex}
-                  className="flex items-center space-x-2 mb-2"
-                >
-                  <RadioGroupItem
-                    value={opt.score.toString()}
-                    id={`q${index}-opt${optIndex}`}
-                  />
-                  <Label htmlFor={`q${index}-opt${optIndex}`}>{opt.text}</Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-        ))}
-        <Button onClick={handleSubmit} className="w-full">
-          다음
-        </Button>
+    <Card className="border-none shadow-none">
+      <CardContent className="p-0">
+        <div className="space-y-6">
+          {questions.map((q, index) => (
+            <div key={index}>
+              <p className="font-medium mb-3 text-sm">{`${index + 1}. ${q.question}`}</p>
+              <RadioGroup
+                onValueChange={(value) => handleAnswer(index, parseInt(value))}
+                value={answers[index]?.toString()}
+              >
+                {q.options.map((option) => (
+                  <div key={option.score} className="flex items-center space-x-2 py-1">
+                    <RadioGroupItem value={option.score.toString()} id={`q${index}-o${option.score}`} />
+                    <Label htmlFor={`q${index}-o${option.score}`} className="font-normal cursor-pointer">
+                      {option.text}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+          ))}
+        </div>
       </CardContent>
+      <CardFooter className="p-0 pt-6">
+        <Button onClick={calculatePersonality} disabled={!isAllAnswered} className="w-full">
+          결과 확인
+        </Button>
+      </CardFooter>
     </Card>
   );
 }

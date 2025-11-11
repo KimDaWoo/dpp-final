@@ -266,6 +266,122 @@ export async function getVolumeRank() {
 
 
 
+
+
 // 기능 제거됨
+
+
+
+/**
+
+ * KIS API를 사용하여 국내 및 해외 금리 종합 정보를 조회합니다.
+
+ */
+
+export async function getInterestRates() {
+
+  if (!APP_KEY || !APP_SECRET) {
+
+    throw new Error('KIS_APP_KEY and KIS_APP_SECRET must be set in .env.local');
+
+  }
+
+
+
+  let accessToken = await getAccessToken();
+
+
+
+  const doFetch = async (token: string) => {
+
+    const url = new URL('/uapi/domestic-stock/v1/quotations/comp-interest', KIS_BASE_URL);
+
+    
+
+    const params = new URLSearchParams({
+
+      'FID_COND_MRKT_DIV_CODE': 'I',
+
+      'FID_COND_SCR_DIV_CODE': '20702',
+
+      'FID_DIV_CLS_CODE': '1',
+
+      'FID_DIV_CLS_CODE1': '',
+
+    });
+
+
+
+    url.search = params.toString();
+
+
+
+    const headers = {
+
+      'Content-Type': 'application/json; charset=utf-8',
+
+      'Authorization': `Bearer ${token}`,
+
+      'appkey': APP_KEY,
+
+      'appsecret': APP_SECRET,
+
+      'tr_id': 'FHPST07020000',
+
+      'custtype': 'P'
+
+    };
+
+    
+
+    const response = await fetch(url.toString(), { method: 'GET', headers });
+
+    const responseText = await response.text();
+
+    return JSON.parse(responseText);
+
+  };
+
+
+
+  try {
+
+    let data = await doFetch(accessToken);
+
+
+
+    if (data.rt_cd === '1' && data.msg_cd === 'EGW00123') {
+
+      accessToken = await getAccessToken(true);
+
+      data = await doFetch(accessToken);
+
+    }
+
+
+
+    if (data.rt_cd !== '0') {
+
+      console.error(`KIS API Error for interest rates: ${data.msg1} (msg_cd: ${data.msg_cd})`);
+
+      return null;
+
+    }
+
+
+
+    return data;
+
+  } catch (error) {
+
+    console.error('Error fetching interest rates:', error);
+
+    return null;
+
+  }
+
+}
+
+
 
 

@@ -8,90 +8,104 @@ import {
   ReactNode,
 } from "react";
 
-type InvestmentPersonality = "aggressive" | "moderate" | "conservative";
+export type InvestmentPersonality = "conservative" | "moderate" | "aggressive";
 
-// 컨텍스트가 제공할 값의 타입 정의
+export const personalityTextMap: Record<
+  InvestmentPersonality,
+  { title: string; description: string }
+> = {
+  conservative: {
+    title: "안정형 (보수적 투자자)",
+    description:
+      "안정성을 최우선으로 생각하며, 원금 손실의 위험을 최소화하고자 합니다. 예금이나 채권과 같은 안전 자산에 대한 선호도가 높습니다.",
+  },
+  moderate: {
+    title: "중립형 (균형 투자자)",
+    description:
+      "안정성과 수익성의 균형을 추구합니다. 위험을 감수하더라도 예금보다는 높은 수익을 기대할 수 있는 투자 상품에 관심을 가집니다.",
+  },
+  aggressive: {
+    title: "공격형 (적극적 투자자)",
+    description:
+      "높은 위험을 감수하더라도 높은 수익률을 목표로 합니다. 주식과 같은 위험 자산에 대한 투자 비중이 높으며, 시장 변동성에 대한 이해도가 높습니다.",
+  },
+};
+
 interface InvestmentPersonalityContextType {
   personality: InvestmentPersonality | null;
-  quizAnswers: number[] | null; // 퀴즈 답변을 저장할 상태
-  setPersonality: (
-    personality: InvestmentPersonality | null,
-    answers: number[] | null
+  answers: (number | null)[];
+  setPersonalityData: (
+    answers: (number | null)[],
+    personality: InvestmentPersonality
   ) => void;
   isLoading: boolean;
 }
 
-const InvestmentPersonalityContext =
-  createContext<InvestmentPersonalityContextType | undefined>(undefined);
+const InvestmentPersonalityContext = createContext<
+  InvestmentPersonalityContextType | undefined
+>(undefined);
 
-export const InvestmentPersonalityProvider = ({
+export function InvestmentPersonalityProvider({
   children,
 }: {
   children: ReactNode;
-}) => {
-  const [personality, setPersonality] =
-    useState<InvestmentPersonality | null>(null);
-  const [quizAnswers, setQuizAnswers] = useState<number[] | null>(null); // 퀴즈 답변 상태
+}) {
+  const [personality, setPersonality] = useState<InvestmentPersonality | null>(
+    null
+  );
+  const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     try {
-      // 저장된 객체 전체를 불러옵니다.
-      const item = window.localStorage.getItem("investmentProfile");
-      if (item) {
-        const profile = JSON.parse(item);
-        setPersonality(profile.personality || null);
-        setQuizAnswers(profile.answers || null);
+      const storedPersonality = localStorage.getItem("investmentPersonality");
+      const storedAnswers = localStorage.getItem("investmentAnswers");
+
+      if (storedPersonality) {
+        setPersonality(JSON.parse(storedPersonality));
+      }
+      if (storedAnswers) {
+        setAnswers(JSON.parse(storedAnswers));
       }
     } catch (error) {
-      console.error("Failed to load investment profile from storage", error);
-      setPersonality(null);
-      setQuizAnswers(null);
+      console.error("Failed to load personality data from localStorage", error);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // 성향과 답변을 함께 저장하는 함수
-  const handleSetPersonality = (
-    newPersonality: InvestmentPersonality | null,
-    newAnswers: number[] | null
+  const setPersonalityData = (
+    newAnswers: (number | null)[],
+    newPersonality: InvestmentPersonality
   ) => {
     try {
-      if (newPersonality && newAnswers) {
-        // 성향과 답변을 하나의 객체로 묶어 저장
-        const profile = { personality: newPersonality, answers: newAnswers };
-        window.localStorage.setItem("investmentProfile", JSON.stringify(profile));
-      } else {
-        window.localStorage.removeItem("investmentProfile");
-      }
+      localStorage.setItem("investmentAnswers", JSON.stringify(newAnswers));
+      localStorage.setItem(
+        "investmentPersonality",
+        JSON.stringify(newPersonality)
+      );
+      setAnswers(newAnswers);
       setPersonality(newPersonality);
-      setQuizAnswers(newAnswers);
     } catch (error) {
-      console.error("Failed to save investment profile to storage", error);
+      console.error("Failed to save personality data to localStorage", error);
     }
   };
 
   return (
     <InvestmentPersonalityContext.Provider
-      value={{
-        personality,
-        quizAnswers,
-        setPersonality: handleSetPersonality,
-        isLoading,
-      }}
+      value={{ personality, answers, setPersonalityData, isLoading }}
     >
       {children}
     </InvestmentPersonalityContext.Provider>
   );
-};
+}
 
-export const useInvestmentPersonality = () => {
+export function useInvestmentPersonality() {
   const context = useContext(InvestmentPersonalityContext);
   if (context === undefined) {
     throw new Error(
-      "useInvestmentPersonality must be used within a InvestmentPersonalityProvider"
+      "useInvestmentPersonality must be used within an InvestmentPersonalityProvider"
     );
   }
   return context;
-};
+}

@@ -13,10 +13,11 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { StockChart } from "./stock-chart";
-import { StockAnalysis } from "../checklist/stock-analysis";
+import { StockAnalysis, AnalysisResult } from "../checklist/stock-analysis";
 import { SearchIcon, Star } from "lucide-react";
 import { useFavorites } from "@/contexts/favorites-context";
 import { StockInfo } from "@/lib/stock-utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SelectedStockInfo {
   symbol: string;
@@ -46,6 +47,7 @@ export function StockSearch({
   const [selectedExchange, setSelectedExchange] = useState<ExchangeType>('전체');
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
   useEffect(() => {
     const searchStocks = async () => {
@@ -91,6 +93,7 @@ export function StockSearch({
   useEffect(() => {
     if (!isModalOpen) {
       setSelectedStockInfo(null);
+      setAnalysisResult(null); // 모달이 닫힐 때 분석 결과도 초기화
     }
   }, [isModalOpen]);
   
@@ -99,7 +102,6 @@ export function StockSearch({
       if (!selectedStockInfo || selectedStockInfo.symbol !== selectedStock.symbol) {
         const findStockInfo = async () => {
           try {
-            // Carousel에서 받은 exchange 정보가 있으면 API 호출 시 포함
             const apiUrl = selectedStock.exchange
               ? `/api/stock/search/${selectedStock.symbol}?exchange=${selectedStock.exchange}`
               : `/api/stock/search/${selectedStock.symbol}`;
@@ -108,7 +110,6 @@ export function StockSearch({
             if (response.ok) {
               const data = await response.json();
               if (Array.isArray(data) && data.length > 0) {
-                // exchange 정보까지 일치하는 첫 번째 항목을 선택
                 const matchingStock = data.find(s => s.symbol === selectedStock.symbol && (!selectedStock.exchange || s.exchange === selectedStock.exchange));
                 setSelectedStockInfo(matchingStock || data[0]);
               }
@@ -140,9 +141,42 @@ export function StockSearch({
     }
   };
 
+  const TradeButton = () => {
+    const isDisabled = !analysisResult?.isPass;
+    const button = (
+       <Button 
+          className="w-full sm:w-auto" 
+          onClick={() => {
+            if (!selectedStock?.symbol) return;
+            const url = `https://www.tossinvest.com/stocks/A${selectedStock.symbol}`;
+            window.open(url, '_blank');
+          }}
+          disabled={isDisabled}
+        >
+          거래하러 가기
+        </Button>
+    );
+
+    if (isDisabled) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>{button}</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>투자 성향 기준을 만족하지 못했습니다.</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+    return button;
+  }
+
   return (
     <>
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-center gap-2">
           {exchanges.map(exchange => (
             <Button
@@ -211,17 +245,25 @@ export function StockSearch({
               <StockChart symbol={selectedStock?.symbol ?? null} />
             </div>
             <div className="h-full">
-              <StockAnalysis symbol={selectedStock?.symbol ?? null} />
+              <StockAnalysis 
+                symbol={selectedStock?.symbol ?? null}
+                onAnalysisComplete={setAnalysisResult}
+              />
             </div>
           </div>
-          <DialogFooter className="pt-4">
-            <Button className="w-full sm:w-auto" onClick={() => {
-              if (!selectedStock?.symbol) return;
-              const url = `https://www.tossinvest.com/stocks/A${selectedStock.symbol}`;
-              window.open(url, '_blank');
-            }}>
-              거래하러 가기
-            </Button>
+          <DialogFooter className="pt-4 sm:justify-between items-center">
+            <div className="text-sm text-muted-foreground">
+              {analysisResult && analysisResult.totalCount > 0 && (
+                <p>
+                  지표 만족률: 
+                  <span className={`font-bold ${analysisResult.isPass ? 'text-green-500' : 'text-red-500'}`}>
+                    {` ${analysisResult.passedCount} / ${analysisResult.totalCount}`}
+                  </span>
+                  {` (${Math.round((analysisResult.passedCount / analysisResult.totalCount) * 100)}%)`}
+                </p>
+              )}
+            </div>
+            <TradeButton />
           </DialogFooter>
         </DialogContent>
       </Dialog>
