@@ -1,240 +1,230 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Command as CommandPrimitive } from "cmdk";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, Star, AlertTriangle } from "lucide-react"; // AlertTriangle 아이콘 임포트
-import { useDebounce } from "@/lib/hooks/use-debounce";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { StockChart } from "./stock-chart";
-import { useCurrency } from "@/contexts/currency-context";
+import { StockAnalysis } from "../checklist/stock-analysis";
+import { SearchIcon, Star } from "lucide-react";
+import { useFavorites } from "@/contexts/favorites-context";
+import { StockInfo } from "@/lib/stock-utils";
 
-type Stock = {
+interface SelectedStockInfo {
   symbol: string;
-  name: string;
-};
+  exchange: string | null;
+}
 
-export function StockSearch() {
-  const router = useRouter();
-  const { currency, formatCurrency } = useCurrency();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<Stock[]>([]);
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
-  const [stockData, setStockData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [watchlist, setWatchlist] = useState<string[]>([]);
+interface StockSearchProps {
+  selectedStock: SelectedStockInfo | null;
+  isModalOpen: boolean;
+  onModalClose: () => void;
+  onSelectStock: (symbol: string) => void;
+}
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+const exchanges = ['전체', 'KOSPI', 'KOSDAQ', 'KONEX', 'ELW'] as const;
+type ExchangeType = typeof exchanges[number];
 
-  useEffect(() => {
-    const savedWatchlist = localStorage.getItem('watchlist');
-    if (savedWatchlist) {
-      setWatchlist(JSON.parse(savedWatchlist));
-    }
-  }, []);
+export function StockSearch({ 
+  selectedStock, 
+  isModalOpen, 
+  onModalClose, 
+  onSelectStock 
+}: StockSearchProps) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<StockInfo[]>([]);
+  const [selectedStockInfo, setSelectedStockInfo] = useState<StockInfo | null>(null);
+  const [isListVisible, setIsListVisible] = useState(false);
+  const [selectedExchange, setSelectedExchange] = useState<ExchangeType>('전체');
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const { isFavorite, addFavorite, removeFavorite } = useFavorites();
 
   useEffect(() => {
     const searchStocks = async () => {
-      if (debouncedSearchTerm) {
-        setIsSearching(true);
-        setSearchResults([]);
+      if (query.trim().length > 0) {
         try {
-          const response = await fetch(`/api/stock/search/${debouncedSearchTerm}`);
-          const data = await response.json();
+          const response = await fetch(`/api/stock/search/${query}?exchange=${selectedExchange}`);
           if (response.ok) {
-            setSearchResults(data);
+            const data = await response.json();
+            if (Array.isArray(data)) {
+              setResults(data);
+              setIsListVisible(true);
+            } else {
+              setResults([]);
+            }
           } else {
-            setError(data.error || "검색 중 오류가 발생했습니다.");
+            setResults([]);
           }
-        } catch (err) {
-          setError("검색 결과를 가져오는데 실패했습니다.");
-        } finally {
-          setIsSearching(false);
+        } catch (error) {
+          console.error("Failed to fetch search results:", error);
+          setResults([]);
         }
       } else {
-        setSearchResults([]);
+        setResults([]);
+        setIsListVisible(false);
       }
     };
-    searchStocks();
-  }, [debouncedSearchTerm]);
-
-  const handleStockSelect = async (stock: Stock) => {
-    setSelectedStock(stock);
-    setIsModalOpen(true);
-    setIsLoading(true);
-    setError(null);
-    setStockData(null);
-
-    try {
-      const response = await fetch(`/api/stock/${stock.symbol}`);
-      if (!response.ok) {
-        // API 에러 발생 시, 여기서 에러 상태를 설정
-        throw new Error('정보 조회 실패');
-      }
-      const data = await response.json();
-      if (data.Symbol) {
-        setStockData(data);
-      } else {
-        throw new Error('정보 조회 실패');
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleStartAnalysis = () => {
-    if (selectedStock) {
-      router.push(`/checklist?symbol=${selectedStock.symbol}`);
-    }
-  };
-
-  const toggleWatchlist = (symbol: string) => {
-    const newWatchlist = watchlist.includes(symbol)
-      ? watchlist.filter(s => s !== symbol)
-      : [...watchlist, symbol];
     
-    setWatchlist(newWatchlist);
-    localStorage.setItem('watchlist', JSON.stringify(newWatchlist));
-    toast.success(
-      watchlist.includes(symbol)
-        ? `${symbol}을(를) 관심 종목에서 제거했습니다.`
-        : `${symbol}을(를) 관심 종목에 추가했습니다.`
-    );
+    searchStocks();
+  }, [query, selectedExchange]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsListVisible(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [searchContainerRef]);
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      setSelectedStockInfo(null);
+    }
+  }, [isModalOpen]);
+  
+  useEffect(() => {
+    if (isModalOpen && selectedStock) {
+      if (!selectedStockInfo || selectedStockInfo.symbol !== selectedStock.symbol) {
+        const findStockInfo = async () => {
+          try {
+            // Carousel에서 받은 exchange 정보가 있으면 API 호출 시 포함
+            const apiUrl = selectedStock.exchange
+              ? `/api/stock/search/${selectedStock.symbol}?exchange=${selectedStock.exchange}`
+              : `/api/stock/search/${selectedStock.symbol}`;
+            
+            const response = await fetch(apiUrl);
+            if (response.ok) {
+              const data = await response.json();
+              if (Array.isArray(data) && data.length > 0) {
+                // exchange 정보까지 일치하는 첫 번째 항목을 선택
+                const matchingStock = data.find(s => s.symbol === selectedStock.symbol && (!selectedStock.exchange || s.exchange === selectedStock.exchange));
+                setSelectedStockInfo(matchingStock || data[0]);
+              }
+            }
+          } catch (error) {
+            console.error("Failed to fetch stock info for modal title:", error);
+            setSelectedStockInfo(null);
+          }
+        };
+        findStockInfo();
+      }
+    }
+  }, [isModalOpen, selectedStock, selectedStockInfo]);
+
+
+  const handleLocalSelect = (stock: StockInfo) => {
+    setSelectedStockInfo(stock);
+    onSelectStock(stock.symbol);
+    setQuery("");
+    setIsListVisible(false);
+  };
+
+  const handleFavoriteToggle = () => {
+    if (!selectedStock?.symbol) return;
+    if (isFavorite(selectedStock.symbol)) {
+      removeFavorite(selectedStock.symbol);
+    } else {
+      addFavorite(selectedStock.symbol);
+    }
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>종목 검색</CardTitle>
-        <CardDescription>분석하고 싶은 종목의 이름 또는 심볼을 입력하세요.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Input
-          placeholder="예: Apple 또는 AAPL"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <ScrollArea className="h-[500px] w-full">
-            <div className="grid grid-cols-1 gap-2">
-              {isSearching && (
-                <div className="flex justify-center items-center p-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              )}
-              {!isSearching && searchResults.length > 0 && (
-                searchResults.map((stock) => (
-                  <DialogTrigger asChild key={stock.symbol}>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start"
-                      onClick={() => handleStockSelect(stock)}
+    <>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          {exchanges.map(exchange => (
+            <Button
+              key={exchange}
+              variant={selectedExchange === exchange ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setSelectedExchange(exchange)}
+            >
+              {exchange}
+            </Button>
+          ))}
+        </div>
+        <Command ref={searchContainerRef} className="relative overflow-visible rounded-lg border">
+          <div className="flex items-center px-3">
+            <SearchIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <CommandPrimitive.Input
+              placeholder="삼성전자 또는 005930..."
+              value={query}
+              onValueChange={setQuery}
+              onFocus={() => query.length > 0 && setIsListVisible(true)}
+              className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
+          {isListVisible && (
+            <CommandList className="absolute top-full z-10 mt-1 w-full rounded-b-md border-t bg-popover text-popover-foreground shadow-md">
+              {results.length > 0 ? (
+                <CommandGroup>
+                  {results.map((stock) => (
+                    <CommandItem
+                      key={`${stock.symbol}-${stock.exchange}`}
+                      onSelect={() => handleLocalSelect(stock)}
+                      value={`${stock.name} ${stock.symbol}`}
+                      className="py-2"
                     >
-                      <span className="font-semibold mr-2">{stock.symbol}</span>
-                      <span className="text-muted-foreground">{stock.name}</span>
-                    </Button>
-                  </DialogTrigger>
-                ))
+                      <span>{stock.name}</span>
+                      <Badge variant="outline" className="ml-2">{stock.exchange}</Badge>
+                      <span className="ml-auto text-xs text-muted-foreground">{stock.symbol}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : (
+                <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
               )}
-              {!isSearching && searchResults.length === 0 && debouncedSearchTerm && (
-                <p className="text-center text-muted-foreground p-4">검색 결과가 없습니다.</p>
-              )}
+            </CommandList>
+          )}
+        </Command>
+      </div>
+
+      <Dialog open={isModalOpen} onOpenChange={onModalClose}>
+        <DialogContent className="max-w-6xl h-[80vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <DialogTitle>{selectedStockInfo?.name} ({selectedStockInfo?.symbol})</DialogTitle>
+              <Button variant="ghost" size="icon" onClick={handleFavoriteToggle}>
+                <Star className={`h-5 w-5 ${selectedStock?.symbol && isFavorite(selectedStock.symbol) ? 'fill-current text-yellow-400' : ''}`} />
+              </Button>
             </div>
-          </ScrollArea>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>
-                {isLoading && <Skeleton className="h-7 w-48" />}
-                {error && '정보 조회 실패'}
-                {stockData && !isLoading && `${stockData.Name} (${stockData.Symbol})`}
-              </DialogTitle>
-              {stockData && !isLoading && (
-                <DialogDescription className="pt-2">
-                  {stockData.Description}
-                </DialogDescription>
-              )}
-            </DialogHeader>
-            
-            {isLoading ? (
-              <div className="space-y-4 py-4">
-                <Skeleton className="h-[250px] w-full mb-4" />
-                <Skeleton className="h-4 w-full" />
-                <div className="grid grid-cols-2 gap-4">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
-                </div>
-                <Skeleton className="h-10 w-full" />
+            <div className="text-sm text-muted-foreground pt-1">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{selectedStockInfo?.exchange}</Badge>
               </div>
-            ) : error ? (
-              // 개선된 오류 UI
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-                <p className="text-muted-foreground">
-                  종목 정보를 가져오는 데 실패했습니다.<br/>
-                  API 호출 한도(분당 5회)를 초과했거나<br/>
-                  유효하지 않은 종목일 수 있습니다.
-                </p>
-                <Button variant="outline" className="mt-6" onClick={() => setIsModalOpen(false)}>
-                  닫기
-                </Button>
-              </div>
-            ) : stockData && (
-              <>
-                <StockChart symbol={stockData.Symbol} />
-                <div className="grid grid-cols-2 gap-4 py-4">
-                  <div className="flex flex-col space-y-1.5">
-                    <p className="font-semibold">섹터</p>
-                    <Badge variant="secondary" className="w-fit">{stockData.Sector || 'N/A'}</Badge>
-                  </div>
-                  <div className="flex flex-col space-y-1.5">
-                    <p className="font-semibold">시가총액</p>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{currency}</Badge>
-                      <span className="font-bold">{formatCurrency(stockData.MarketCapitalization)}</span>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter className="sm:justify-between gap-2">
-                  <Button variant="outline" onClick={() => toggleWatchlist(stockData.Symbol)}>
-                    <Star className={cn("h-4 w-4 mr-2", watchlist.includes(stockData.Symbol) ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground")} />
-                    {watchlist.includes(stockData.Symbol) ? '관심 종목 제거' : '관심 종목 추가'}
-                  </Button>
-                  <Button onClick={handleStartAnalysis} className="w-full sm:w-auto">
-                    사전 분석 시작하기
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
+            </div>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 flex-1 overflow-y-auto pt-2">
+            <div className="h-[400px]">
+              <StockChart symbol={selectedStock?.symbol ?? null} />
+            </div>
+            <div className="h-full">
+              <StockAnalysis symbol={selectedStock?.symbol ?? null} />
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button className="w-full sm:w-auto" onClick={() => {
+              if (!selectedStock?.symbol) return;
+              const url = `https://www.tossinvest.com/stocks/A${selectedStock.symbol}`;
+              window.open(url, '_blank');
+            }}>
+              거래하러 가기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

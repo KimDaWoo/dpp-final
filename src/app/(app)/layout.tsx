@@ -3,8 +3,11 @@ import { MainNav } from "@/components/layout/main-nav";
 import { UserMenu } from "@/components/layout/user-menu";
 import { CurrencyToggle } from "@/components/layout/currency-toggle";
 import Link from "next/link";
-import Image from "next/image"; // Image 컴포넌트 임포트
+import Image from "next/image";
 import { auth } from "@/auth";
+import { FavoritesProvider } from "@/contexts/favorites-context";
+import { IndicatorPreferenceProvider } from "@/contexts/indicator-preference-context";
+import { InvestmentPersonalityProvider } from "@/contexts/investment-personality-context";
 
 export default async function AppLayout({
   children,
@@ -27,7 +30,7 @@ export default async function AppLayout({
           </div>
         </div>
       </div>
-      <div className="flex flex-col">
+      <div className="flex flex-col min-w-0">
         <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
           <div className="w-full flex-1">
             <MainNav />
@@ -36,7 +39,13 @@ export default async function AppLayout({
           <UserMenu session={session} />
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
-          {children}
+          <FavoritesProvider>
+            <IndicatorPreferenceProvider>
+              <InvestmentPersonalityProvider>
+                {children}
+              </InvestmentPersonalityProvider>
+            </IndicatorPreferenceProvider>
+          </FavoritesProvider>
         </main>
       </div>
     </div>

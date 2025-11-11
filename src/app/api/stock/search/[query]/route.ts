@@ -1,36 +1,44 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { loadStocks, StockInfo } from '@/lib/stock-utils';
 
-const YAHOO_AUTOCOMPLETE_URL = 'https://query1.finance.yahoo.com/v6/finance/autocomplete';
+export async function GET(
+  request: NextRequest,
+  context: any
+) {
+  const { query: queryParam } = await context.params;
 
-export async function GET(_request: Request, { params }: { params: { query: string } }) {
-  const awaitedParams = await params;
-  const query = awaitedParams.query;
-
-  if (!query) {
-    return NextResponse.json([]);
+  if (!queryParam) {
+    return NextResponse.json({ error: 'Search query is required.' }, { status: 400 });
   }
 
   try {
-    // Yahoo Finance의 'autocomplete' 엔드포인트 사용
-    const response = await fetch(`${YAHOO_AUTOCOMPLETE_URL}?query=${query}&region=US&lang=en-US`);
-    const data = await response.json();
+    const { searchParams } = new URL(request.url);
+    const exchange = searchParams.get('exchange');
+    
+    const query = decodeURIComponent(queryParam).toLowerCase();
+    
+    const allStocks = await loadStocks();
 
-    if (!data.ResultSet?.Result) {
-      console.error("Yahoo Finance API Error (Autocomplete):", data);
-      return NextResponse.json({ error: 'Failed to fetch search results from Yahoo Finance' }, { status: 500 });
+    // 1. Filter by exchange if specified
+    let stocksToSearch: StockInfo[];
+    if (exchange && exchange !== '전체') {
+      stocksToSearch = allStocks.filter(stock => stock.exchange === exchange);
+    } else {
+      stocksToSearch = allStocks;
     }
 
-    // 프론트엔드 형식에 맞게 변환 (주식만 필터링)
-    const formattedData = data.ResultSet.Result
-      .filter((item: any) => item.typeDisp === 'Equity')
-      .map((item: any) => ({
-        symbol: item.symbol,
-        name: item.name,
-      }));
+    // 2. Filter by search query
+    const filteredStocks = stocksToSearch
+      .filter(stock => 
+        stock && stock.symbol && stock.name && 
+        (stock.symbol.toLowerCase().includes(query) ||
+        stock.name.toLowerCase().includes(query))
+      )
+      .slice(0, 20);
 
-    return NextResponse.json(formattedData);
-  } catch (error) {
-    console.error(`Error searching for stock "${query}" from Yahoo Finance:`, error);
-    return NextResponse.json({ error: 'An error occurred while searching for stocks' }, { status: 500 });
+    return NextResponse.json(filteredStocks);
+  } catch (error: any) {
+    console.error('Error in stock search API:', error);
+    return NextResponse.json({ error: 'Failed to fetch stock data.' }, { status: 500 });
   }
 }

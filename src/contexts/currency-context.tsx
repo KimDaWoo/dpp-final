@@ -8,7 +8,7 @@ interface CurrencyContextType {
   currency: Currency;
   exchangeRate: number | null;
   toggleCurrency: () => void;
-  formatCurrency: (value: number | null | undefined) => string;
+  formatCurrency: (value: number | null | undefined, inputCurrency?: 'USD' | 'KRW') => string;
 }
 
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
@@ -45,11 +45,22 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('currency', newCurrency);
   };
 
-  const formatCurrency = useCallback((value: number | null | undefined) => {
+  const formatCurrency = useCallback((value: number | null | undefined, inputCurrency: 'USD' | 'KRW' = 'USD') => {
     if (value === null || value === undefined) return 'N/A';
+    if (!exchangeRate) return '...'; // 환율 정보가 아직 로드되지 않았을 때
 
-    if (currency === 'KRW' && exchangeRate) {
-      const krwValue = value * exchangeRate;
+    let valueInUsd: number;
+
+    // 1. 입력값을 USD 기준으로 통일
+    if (inputCurrency === 'KRW') {
+      valueInUsd = value / exchangeRate;
+    } else {
+      valueInUsd = value;
+    }
+
+    // 2. 사용자가 선택한 통화로 포맷팅
+    if (currency === 'KRW') {
+      const krwValue = valueInUsd * exchangeRate;
       return new Intl.NumberFormat('ko-KR', {
         style: 'currency',
         currency: 'KRW',
@@ -66,7 +77,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       compactDisplay: 'short',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(value);
+    }).format(valueInUsd);
   }, [currency, exchangeRate]);
 
   return (

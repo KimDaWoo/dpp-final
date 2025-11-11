@@ -1,33 +1,54 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation'; // useRouter 임포트
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useState } from "react";
+import { useSession, signOut } from "next-auth/react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import {
+  useIndicatorPreferences,
+  AVAILABLE_INDICATORS,
+} from "@/contexts/indicator-preference-context";
+import { useInvestmentPersonality } from "@/contexts/investment-personality-context";
+import { TrendingUp, Target, SlidersHorizontal, LogOut } from "lucide-react";
+import { OnboardingModal } from "@/components/survey/onboarding-modal";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function MyPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
-  const [investmentType, setInvestmentType] = useState<string | null>(null);
-
-  useEffect(() => {
-    const type = localStorage.getItem('investmentType');
-    setInvestmentType(type);
-  }, []);
-
-  const handleRetakeQuiz = () => {
-    localStorage.removeItem('investmentType');
-    router.push('/quiz');
-  };
+  const {
+    preferences: indicatorPreferences,
+  } = useIndicatorPreferences();
+  const { personality, quizAnswers } = useInvestmentPersonality();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase();
   };
 
-  if (status === 'loading') {
+  const personalityTextMap = {
+    aggressive: "공격적 투자자",
+    moderate: "중립적 투자자",
+    conservative: "보수적 투자자",
+  };
+
+  if (status === "loading") {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />
@@ -48,47 +69,122 @@ export default function MyPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">마이페이지</h1>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>계정 정보</CardTitle>
-        </CardHeader>
-        <CardContent className="flex items-center gap-4">
-          <Avatar className="h-16 w-16">
-            <AvatarImage src={session?.user?.image ?? undefined} alt={session?.user?.name ?? ''} />
-            <AvatarFallback>{getInitials(session?.user?.name ?? 'User')}</AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="text-lg font-semibold">{session?.user?.name}</p>
-            <p className="text-muted-foreground">{session?.user?.email}</p>
+    <>
+      <OnboardingModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialIndicators={indicatorPreferences || []}
+        initialAnswers={quizAnswers || undefined}
+      />
+      <div className="space-y-24">
+        <div>
+          <div className="flex items-center gap-1 mb-3">
+            <h2 className="text-lg font-bold">계정 정보</h2>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="space-y-1.5">
-            <CardTitle>나의 투자 성향</CardTitle>
-            <CardDescription>이 성향은 기업 분석 체크리스트의 기준에 자동으로 반영됩니다.</CardDescription>
+          <div className="grid gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-6">
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage
+                      src={session?.user?.image ?? undefined}
+                      alt={session?.user?.name ?? ""}
+                    />
+                    <AvatarFallback>
+                      {getInitials(session?.user?.name ?? "User")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="space-y-1">
+                    <p className="text-lg font-semibold">
+                      {session?.user?.name}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {session?.user?.email}
+                    </p>
+                  </div>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="ml-auto"
+                          onClick={() => signOut({ callbackUrl: "/" })}
+                        >
+                          <LogOut className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>로그아웃</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </CardTitle>
+              </CardHeader>
+            </Card>
           </div>
-          <Button variant="outline" onClick={handleRetakeQuiz}>성향 다시 분석하기</Button>
-        </CardHeader>
-        <CardContent>
-          <p className="text-lg">
-            분석 결과: <span className="font-bold text-primary">{investmentType === 'aggressive' ? '공격적 투자자' : '보수적 투자자'}</span>
-          </p>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Button 
-        variant="destructive" 
-        className="w-full sm:w-auto"
-        onClick={() => signOut({ callbackUrl: '/' })}
-      >
-        로그아웃
-      </Button>
-    </div>
+
+        <div>
+          <div className="flex items-center gap-1 mb-3">
+            <h2 className="text-lg font-bold">설정</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsModalOpen(true)}
+              className="rounded-full h-8 w-8 border-2"
+            >
+              <SlidersHorizontal className="h-3 w-3" />
+            </Button>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  나의 투자 성향
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">
+                  {personality
+                    ? personalityTextMap[personality]
+                    : "성향 분석 필요"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  이 성향은 기업 분석 체크리스트의 기준에 자동으로 반영됩니다.
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  나의 선호 지표
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {indicatorPreferences && indicatorPreferences.length > 0 ? (
+                    indicatorPreferences.map((key) => (
+                      <Badge key={key} variant="secondary">
+                        {AVAILABLE_INDICATORS[key]}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      선호 지표가 설정되지 않았습니다.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        
+      </div>
+    </>
   );
 }

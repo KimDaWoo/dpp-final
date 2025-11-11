@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { JournalEntrySchema } from '@/lib/schemas';
@@ -14,10 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from "sonner";
 import { Trash2 } from 'lucide-react';
 
-type JournalEntry = z.infer<typeof JournalEntrySchema>;
+type JournalEntryFormValues = z.infer<typeof JournalEntrySchema>;
 
 export default function MistakesPage() {
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [entries, setEntries] = useState<JournalEntryFormValues[]>([]);
 
   useEffect(() => {
     const savedEntries = localStorage.getItem('journalEntries');
@@ -26,8 +26,8 @@ export default function MistakesPage() {
     }
   }, []);
 
-  const form = useForm<JournalEntry>({
-    resolver: zodResolver(JournalEntrySchema),
+  const form = useForm<JournalEntryFormValues>({
+    resolver: zodResolver(JournalEntrySchema as any),
     defaultValues: {
       symbol: '',
       entryPrice: 0,
@@ -37,7 +37,7 @@ export default function MistakesPage() {
     },
   });
 
-  const onSubmit = (data: JournalEntry) => {
+  const onSubmit: SubmitHandler<JournalEntryFormValues> = (data) => {
     const newEntries = [...entries, data];
     setEntries(newEntries);
     localStorage.setItem('journalEntries', JSON.stringify(newEntries));
