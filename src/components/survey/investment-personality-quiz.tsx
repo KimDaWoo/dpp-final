@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -57,8 +57,16 @@ interface QuizProps {
 }
 
 export function InvestmentPersonalityQuiz({ onComplete, initialAnswers }: QuizProps) {
-  const [answers, setAnswers] = useState<(number | null)[]>(initialAnswers || Array(questions.length).fill(null));
+  // Always initialize with a correctly-sized array of nulls to prevent the `[].every()` bug.
+  const [answers, setAnswers] = useState<(number | null)[]>(Array(questions.length).fill(null));
   const { setPersonalityData } = useInvestmentPersonality();
+
+  // Sync with props from the context once they are loaded.
+  useEffect(() => {
+    if (initialAnswers && initialAnswers.length === questions.length) {
+      setAnswers(initialAnswers);
+    }
+  }, [initialAnswers]);
 
   const handleAnswer = (questionIndex: number, score: number) => {
     const newAnswers = [...answers];
@@ -85,7 +93,7 @@ export function InvestmentPersonalityQuiz({ onComplete, initialAnswers }: QuizPr
   const isAllAnswered = answers.every((answer) => answer !== null);
 
   return (
-    <Card className="border-none shadow-none">
+    <Card className="border-none shadow-none p-0">
       <CardContent className="p-0">
         <div className="space-y-6">
           {questions.map((q, index) => (
@@ -108,9 +116,9 @@ export function InvestmentPersonalityQuiz({ onComplete, initialAnswers }: QuizPr
           ))}
         </div>
       </CardContent>
-      <CardFooter className="p-0 pt-6">
+      <CardFooter className="p-0 pt-6 flex">
         <Button onClick={calculatePersonality} disabled={!isAllAnswered} className="w-full">
-          결과 확인
+          완료
         </Button>
       </CardFooter>
     </Card>

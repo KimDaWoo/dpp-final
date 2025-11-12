@@ -122,7 +122,7 @@ export function IndicatorPreferenceModal({
           </TooltipProvider>
         </div>
         <DialogFooter>
-          <Button onClick={handleSubmit}>설정 완료</Button>
+          <Button onClick={handleSubmit} className="w-full">설정 완료</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
