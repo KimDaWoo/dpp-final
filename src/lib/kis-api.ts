@@ -126,7 +126,7 @@ export async function getStockDetails(symbol: string) {
 /**
  * 국내 주식의 기간별 시세(일봉)를 조회합니다.
  */
-export async function getStockPriceHistory(symbol: string, days: number = 365) {
+export async function getStockPriceHistory(symbol: string, startDate: string, endDate: string) {
   if (!APP_KEY || !APP_SECRET) {
     throw new Error('KIS_APP_KEY and KIS_APP_SECRET must be set in .env.local');
   }
@@ -134,18 +134,14 @@ export async function getStockPriceHistory(symbol: string, days: number = 365) {
   let accessToken = await getAccessToken();
 
   const doFetch = async (token: string) => {
-    const today = new Date();
-    const startDate = new Date();
-    startDate.setDate(today.getDate() - days);
-    const formatDate = (date: Date) => date.toISOString().slice(0, 10).replace(/-/g, '');
-    
     const url = new URL('/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice', KIS_BASE_URL);
     url.searchParams.append('fid_cond_mrkt_div_code', 'J');
     url.searchParams.append('fid_input_iscd', symbol);
-    url.searchParams.append('fid_input_date_1', formatDate(startDate));
-    url.searchParams.append('fid_input_date_2', formatDate(today));
+    url.searchParams.append('fid_input_date_1', startDate);
+    url.searchParams.append('fid_input_date_2', endDate);
     url.searchParams.append('fid_period_div_code', 'D');
     url.searchParams.append('fid_org_adj_prc', '1');
+    url.searchParams.append('FID_ETC_CLS_CODE', '1'); // 재무제표 및 외국인 정보 포함
 
     const headers = {
       'Content-Type': 'application/json; charset=utf-8',
@@ -176,7 +172,7 @@ export async function getStockPriceHistory(symbol: string, days: number = 365) {
       throw new Error(`KIS API Error for price history: ${data.msg1}`);
     }
 
-    return data.output2 || []; // Ensure an array is always returned
+    return data; // output1과 output2를 모두 포함한 전체 데이터 반환
   } catch (error) {
     console.error(`Error fetching stock price history for ${symbol}:`, error);
     throw error;

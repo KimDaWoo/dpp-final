@@ -1,4 +1,3 @@
-
 import { TradeLog } from "@/contexts/trade-log-context";
 import { differenceInDays } from 'date-fns';
 
@@ -111,4 +110,70 @@ export function analyzeTradeLogs(tradeLogs: TradeLog[]): TradeAnalysisSummary {
     averageHoldingPeriod,
     analyzedTrades,
   };
+}
+
+
+// --- 신규 추가: 객관적 지표 분류 로직 ---
+
+export type IndicatorCategory = "가치주" | "성장주";
+
+export interface IndicatorClassification {
+  indicator: "PER" | "PBR" | "EPS";
+  value: number;
+  classification: "부합" | "미달";
+  category: IndicatorCategory;
+  criteria: string;
+}
+
+// 일반적인 투자 스타일별 참고 기준 정의
+const classificationCriteria = {
+  PER: {
+    "가치주": (value: number) => value < 10,
+    "성장주": (value: number) => value < 30,
+    criteria: { "가치주": "< 10", "성장주": "< 30" },
+  },
+  PBR: {
+    "가치주": (value: number) => value < 1,
+    "성장주": (value: number) => value < 3,
+    criteria: { "가치주": "< 1", "성장주": "< 3" },
+  },
+  EPS: {
+    "가치주": (value: number) => value > 2000,
+    "성장주": (value: number) => value > 1000, // 성장주는 EPS 자체보다 성장률이 중요하지만, 최소 기준으로 설정
+    criteria: { "가치주": "> 2000", "성장주": "> 1000" },
+  },
+};
+
+/**
+ * 재무 지표를 객관적인 기준에 따라 분류하는 함수
+ * @param fundamentals - per, pbr, eps를 포함한 재무 지표 객체
+ * @returns 분류된 지표 정보 배열
+ */
+export function classifyIndicators(fundamentals: { per: number; pbr: number; eps: number; }): IndicatorClassification[] {
+  const results: IndicatorClassification[] = [];
+  const indicators: ("PER" | "PBR" | "EPS")[] = ["PER", "PBR", "EPS"];
+
+  indicators.forEach(indicator => {
+    const value = fundamentals[indicator.toLowerCase() as keyof typeof fundamentals];
+    
+    // 가치주 기준 분류
+    results.push({
+      indicator,
+      value,
+      classification: classificationCriteria[indicator]["가치주"](value) ? "부합" : "미달",
+      category: "가치주",
+      criteria: `${classificationCriteria[indicator].criteria["가치주"]}`,
+    });
+
+    // 성장주 기준 분류
+    results.push({
+      indicator,
+      value,
+      classification: classificationCriteria[indicator]["성장주"](value) ? "부합" : "미달",
+      category: "성장주",
+      criteria: `${classificationCriteria[indicator].criteria["성장주"]}`,
+    });
+  });
+
+  return results;
 }

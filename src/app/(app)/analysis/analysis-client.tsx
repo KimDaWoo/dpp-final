@@ -39,43 +39,36 @@ export function AnalysisClient() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<AnalyzedTrade | null>(null);
-  const [fundamentals, setFundamentals] = useState<Record<string, Fundamentals>>({});
-  const [isLoadingFundamentals, setIsLoadingFundamentals] = useState(false);
+  const [buyDateData, setBuyDateData] = useState<any | null>(null);
+  const [sellDateData, setSellDateData] = useState<any | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   const analysisSummary: TradeAnalysisSummary = useMemo(() => analyzeTradeLogs(tradeLogs), [tradeLogs]);
 
-  useEffect(() => {
-    const fetchFundamentals = async () => {
-      setIsLoadingFundamentals(true);
-      const uniqueSymbols = [...new Set(analysisSummary.analyzedTrades.map(t => t.symbol))];
-      const promises = uniqueSymbols.map(symbol =>
-        fetch(`/api/stock/fundamentals/${symbol}`).then(res => res.json())
-      );
-      
-      try {
-        const results = await Promise.all(promises);
-        const fundamentalsMap = results.reduce((acc, data) => {
-          if (data && data.symbol && !data.error) {
-            acc[data.symbol] = data;
-          }
-          return acc;
-        }, {} as Record<string, Fundamentals>);
-        setFundamentals(fundamentalsMap);
-      } catch (error) {
-        console.error("Failed to fetch fundamentals:", error);
-      } finally {
-        setIsLoadingFundamentals(false);
-      }
-    };
-
-    if (analysisSummary.analyzedTrades.length > 0) {
-      fetchFundamentals();
-    }
-  }, [analysisSummary.analyzedTrades]);
-
-  const handleRowClick = (trade: AnalyzedTrade) => {
+  const handleRowClick = async (trade: AnalyzedTrade) => {
     setSelectedTrade(trade);
     setIsModalOpen(true);
+    setIsLoadingData(true);
+    setBuyDateData(null);
+    setSellDateData(null);
+
+    try {
+      const buyPromise = fetch(`/api/stock/historical/${trade.symbol}/${trade.buyDate}`).then(res => res.json());
+
+      if (trade.buyDate === trade.sellDate) {
+        const buyData = await buyPromise;
+        if (!buyData.error) setBuyDateData(buyData);
+      } else {
+        const sellPromise = fetch(`/api/stock/historical/${trade.symbol}/${trade.sellDate}`).then(res => res.json());
+        const [buyData, sellData] = await Promise.all([buyPromise, sellPromise]);
+        if (!buyData.error) setBuyDateData(buyData);
+        if (!sellData.error) setSellDateData(sellData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch historical data:", error);
+    } finally {
+      setIsLoadingData(false);
+    }
   };
 
   if (tradeLogs.length === 0 || analysisSummary.analyzedTrades.length === 0) {
@@ -90,7 +83,7 @@ export function AnalysisClient() {
   return (
     <>
       <div className="space-y-8">
-        {/* 1. 종합 분석 대시보드 */}
+        {/* ... (종합 분석 대시보드 JSX는 기존과 동일) ... */}
         <section>
           <h2 className="text-2xl font-semibold mb-4">종합 분석</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -140,7 +133,7 @@ export function AnalysisClient() {
           </div>
         </section>
 
-        {/* 2. 상세 거래 내역 테이블 */}
+        {/* ... (상세 거래 내역 테이블 JSX는 기존과 동일) ... */}
         <section>
           <h2 className="text-2xl font-semibold mb-4">상세 거래 내역</h2>
           <div className="rounded-md border">
@@ -179,8 +172,9 @@ export function AnalysisClient() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         trade={selectedTrade}
-        fundamentals={selectedTrade ? fundamentals[selectedTrade.symbol] : null}
-        isLoading={isLoadingFundamentals && selectedTrade && !fundamentals[selectedTrade.symbol]}
+        buyDateData={buyDateData}
+        sellDateData={sellDateData}
+        isLoading={isLoadingData}
       />
     </>
   );
