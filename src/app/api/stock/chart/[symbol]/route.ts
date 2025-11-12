@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStockPriceHistory } from '@/lib/kis-api';
 
+function formatDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+}
+
 export async function GET(
   _request: NextRequest,
-  context: any
+  context: { params: { symbol: string } }
 ) {
   const { symbol: rawSymbol } = await context.params;
   const symbol = rawSymbol?.toUpperCase();
@@ -13,7 +20,22 @@ export async function GET(
   }
 
   try {
-    const priceHistory = await getStockPriceHistory(symbol, 365);
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - 365);
+
+    const formattedStartDate = formatDate(startDate);
+    const formattedEndDate = formatDate(endDate);
+
+    console.log(`[Chart API] Fetching data for symbol: ${symbol} from ${formattedStartDate} to ${formattedEndDate}`);
+
+    const historyResponse = await getStockPriceHistory(symbol, formattedStartDate, formattedEndDate);
+    console.log('[Chart API] Full response from KIS API:', JSON.stringify(historyResponse, null, 2));
+
+    const priceHistory = historyResponse.output2; // output2가 일자별 가격 배열입니다.
+    const latestInfo = historyResponse.output1; // output1은 가장 최신 정보 객체입니다.
+    console.log('[Chart API] Latest day summary (output1):', JSON.stringify(latestInfo, null, 2));
+    console.log('[Chart API] Extracted price history array (output2):', JSON.stringify(priceHistory, null, 2));
 
     const formattedData = Array.isArray(priceHistory) 
       ? priceHistory
