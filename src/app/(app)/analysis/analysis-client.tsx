@@ -82,10 +82,10 @@ export function AnalysisClient() {
 
   return (
     <>
-      <div className="space-y-8">
+      <div className="space-y-24">
         {/* ... (종합 분석 대시보드 JSX는 기존과 동일) ... */}
         <section>
-          <h2 className="text-2xl font-semibold mb-4">종합 분석</h2>
+          <h2 className="text-lg font-semibold mb-3">종합 분석</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader>
@@ -135,7 +135,7 @@ export function AnalysisClient() {
 
         {/* ... (상세 거래 내역 테이블 JSX는 기존과 동일) ... */}
         <section>
-          <h2 className="text-2xl font-semibold mb-4">상세 거래 내역</h2>
+          <h2 className="text-lg font-semibold mb-3">상세 거래 내역</h2>
           <div className="rounded-md border">
             <Table>
               <TableHeader>

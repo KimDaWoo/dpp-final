@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, BarChart3, ClipboardList, UserCircle } from "lucide-react";
+import { LayoutDashboard, BarChart3, ClipboardList, UserCircle, TrendingUp } from "lucide-react";
 
 const links = [
   { name: "대시보드", href: "/dashboard", icon: LayoutDashboard },
   { name: "종목 분석", href: "/trades", icon: BarChart3 },
   { name: "매매 복기", href: "/mistakes", icon: ClipboardList },
-  { name: "매매 분석", href: "/analysis", icon: BarChart3 },
+  { name: "매매 분석", href: "/analysis", icon: TrendingUp },
   { name: "마이페이지", href: "/mypage", icon: UserCircle },
 ];
 
