@@ -27,7 +27,7 @@ import { useDebounce } from "@/lib/hooks/use-debounce";
 const TradeLogSchema = z.object({
   symbol: z.string().min(1, "종목을 검색하여 선택해주세요."),
   name: z.string().min(1, "종목명을 입력해주세요."),
-  buyPrice: z.number().min(0, "매수가는 0 이상이어야 합니다."),
+  buyPrice: z.number().positive("매수가는 0보다 커야 합니다."),
   buyQuantity: z.number().int().min(1, "매수량은 1 이상이어야 합니다."),
   buyDate: z.date(),
   sellPrice: z.number().min(0, "매도가는 0 이상이어야 합니다.").optional(),
@@ -53,6 +53,17 @@ const TradeLogSchema = z.object({
         code: z.ZodIssueCode.custom,
         message: "매도일은 매수일보다 이전일 수 없습니다.",
         path: ["sellDate"],
+      });
+    }
+  }
+
+  // Validate sellPrice only if all sell-related fields are provided
+  if (data.sellPrice !== undefined && data.sellQuantity !== undefined && data.sellDate !== undefined) {
+    if (data.sellPrice <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "매도가는 0보다 커야 합니다.",
+        path: ["sellPrice"],
       });
     }
   }
