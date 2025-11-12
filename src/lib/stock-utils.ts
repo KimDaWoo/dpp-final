@@ -8,6 +8,7 @@ export interface StockInfo {
   sector: string;
   exchange: 'KOSPI' | 'KOSDAQ' | 'KONEX' | 'ELW';
   realtimeSymbol: string;
+  price?: number; // Add optional price property
 }
 
 let cachedStocks: StockInfo[] | null = null;

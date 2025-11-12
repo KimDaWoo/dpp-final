@@ -75,8 +75,10 @@ export function StockSearch({
         const stockWithCurrentPrice: StockInfo = {
           symbol: details.Symbol,
           name: details.Name,
-          exchange: selectedStockInfo?.exchange || '',
-          price: details.CurrentPrice
+          exchange: (selectedStockInfo?.exchange as StockInfo['exchange']) || 'KOSPI',
+          price: details.CurrentPrice,
+          sector: selectedStockInfo?.sector || 'N/A', // Add missing sector
+          realtimeSymbol: selectedStockInfo?.realtimeSymbol || details.Symbol, // Add missing realtimeSymbol
         };
         setStockForLog(stockWithCurrentPrice);
         toast.success("현재가 조회가 완료되었습니다.", { id: loadingToast });

@@ -87,8 +87,11 @@ export function StockChart({ symbol }: { symbol: string | null }) {
           <Tooltip
             cursor={{ strokeDasharray: '3 3' }}
             contentStyle={{
-              backgroundColor: 'hsl(var(--background))',
-              borderColor: 'hsl(var(--border))',
+              backgroundColor: '#FFFFFF',
+              borderColor: 'transparent',
+              boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.1)',
+              borderRadius: '8px',
+              padding: '10px',
               fontSize: '12px',
             }}
             // transformedData에서 이미 통화 변환이 완료되었으므로,
