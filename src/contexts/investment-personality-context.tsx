@@ -39,6 +39,7 @@ interface InvestmentPersonalityContextType {
     personality: InvestmentPersonality
   ) => void;
   isLoading: boolean;
+  getPreferenceValues: () => { per: number; pbr: number; eps: number };
 }
 
 const InvestmentPersonalityContext = createContext<
@@ -63,12 +64,15 @@ export function InvestmentPersonalityProvider({
 
       if (storedPersonality) {
         setPersonality(JSON.parse(storedPersonality));
+      } else {
+        setPersonality("moderate"); // 기본값 설정
       }
       if (storedAnswers) {
         setAnswers(JSON.parse(storedAnswers));
       }
     } catch (error) {
       console.error("Failed to load personality data from localStorage", error);
+      setPersonality("moderate"); // 에러 시 기본값 설정
     } finally {
       setIsLoading(false);
     }
@@ -91,9 +95,21 @@ export function InvestmentPersonalityProvider({
     }
   };
 
+  const getPreferenceValues = () => {
+    switch (personality) {
+      case "conservative":
+        return { per: 10, pbr: 0.8, eps: 2000 };
+      case "aggressive":
+        return { per: 25, pbr: 2.0, eps: 1000 };
+      case "moderate":
+      default:
+        return { per: 15, pbr: 1.2, eps: 1500 };
+    }
+  };
+
   return (
     <InvestmentPersonalityContext.Provider
-      value={{ personality, answers, setPersonalityData, isLoading }}
+      value={{ personality, answers, setPersonalityData, isLoading, getPreferenceValues }}
     >
       {children}
     </InvestmentPersonalityContext.Provider>
