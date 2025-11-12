@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useCurrency } from "@/contexts/currency-context";
 import { useMemo, useState, useEffect } from "react";
 import { TradeDetailModal } from "@/components/analysis/trade-detail-modal";
+import { DollarSign } from "lucide-react"; // DollarSign 아이콘 임포트
 
 // 숫자 포맷팅 헬퍼 함수
 const formatNumber = (num: number, options: Intl.NumberFormatOptions = {}) => {
@@ -133,34 +134,53 @@ export function AnalysisClient() {
           </div>
         </section>
 
-        {/* ... (상세 거래 내역 테이블 JSX는 기존과 동일) ... */}
+        {/* 2. 상세 거래 내역 테이블 */}
         <section>
           <h2 className="text-lg font-semibold mb-3">상세 거래 내역</h2>
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>종목명</TableHead>
-                  <TableHead className="text-right">실현 손익</TableHead>
-                  <TableHead className="text-right">수익률</TableHead>
-                  <TableHead className="text-right">보유 기간</TableHead>
-                  <TableHead className="text-right">매수일</TableHead>
-                  <TableHead className="text-right">매도일</TableHead>
+                  <TableHead className="text-left">종목명</TableHead>
+                  <TableHead className="text-left">
+                    <div className="flex items-center gap-1">
+                      실현 손익
+                      <div className="flex items-center justify-center w-5 h-5 rounded bg-muted text-muted-foreground ml-1">
+                        {currency === 'KRW' ? (
+                          <span className="font-sans font-semibold text-xs">₩</span>
+                        ) : (
+                          <DollarSign className="h-3 w-3" />
+                        )}
+                      </div>
+                    </div>
+                  </TableHead>
+                  <TableHead className="text-left">수익률</TableHead>
+                  <TableHead className="text-left">보유 기간</TableHead>
+                  <TableHead className="text-left">매수일</TableHead>
+                  <TableHead className="text-left">매도일</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {analysisSummary.analyzedTrades.map((trade: AnalyzedTrade) => (
                   <TableRow key={trade.id} onClick={() => handleRowClick(trade)} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell className="font-medium">{trade.name} ({trade.symbol})</TableCell>
-                    <TableCell className={`text-right font-semibold ${trade.realizedProfitLoss >= 0 ? "text-red-600" : "text-blue-600"}`}>
-                      {formatCurrency(trade.realizedProfitLoss, currency, exchangeRate)}
+                    <TableCell className="font-medium text-left">{trade.name} ({trade.symbol})</TableCell>
+                    <TableCell className={`text-left font-semibold ${trade.realizedProfitLoss >= 0 ? "text-red-600" : "text-blue-600"}`}>
+                      {formatNumber(
+                        currency === 'USD' && exchangeRate 
+                          ? trade.realizedProfitLoss / exchangeRate 
+                          : trade.realizedProfitLoss,
+                        {
+                          minimumFractionDigits: currency === 'USD' ? 2 : 0,
+                          maximumFractionDigits: currency === 'USD' ? 2 : 0,
+                        }
+                      )}
                     </TableCell>
-                    <TableCell className={`text-right ${trade.returnRate >= 0 ? "text-red-600" : "text-blue-600"}`}>
+                    <TableCell className={`text-left ${trade.returnRate >= 0 ? "text-red-600" : "text-blue-600"}`}>
                       {formatNumber(trade.returnRate, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
                     </TableCell>
-                    <TableCell className="text-right">{trade.holdingPeriod}일</TableCell>
-                    <TableCell className="text-right">{trade.buyDate}</TableCell>
-                    <TableCell className="text-right">{trade.sellDate}</TableCell>
+                    <TableCell className="text-left">{trade.holdingPeriod}일</TableCell>
+                    <TableCell className="text-left">{trade.buyDate}</TableCell>
+                    <TableCell className="text-left">{trade.sellDate}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
