@@ -14,7 +14,8 @@ import {
   useIndicatorPreferences,
   AVAILABLE_INDICATORS,
 } from "@/contexts/indicator-preference-context";
-import { OnboardingModal } from "@/components/survey/onboarding-modal";
+import { InvestmentPersonalityModal } from "@/components/survey/investment-personality-modal";
+import { IndicatorPreferenceModal } from "@/components/survey/indicator-preference-modal";
 import { IndicatorHelpModal } from "@/components/survey/indicator-help-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -22,14 +23,9 @@ export default function MyPage() {
   const { data: session } = useSession();
   const { personality, answers } = useInvestmentPersonality();
   const { preferences } = useIndicatorPreferences();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPersonalityModalOpen, setIsPersonalityModalOpen] = useState(false);
+  const [isIndicatorModalOpen, setIsIndicatorModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
-  const [modalStartStep, setModalStartStep] = useState<"quiz" | "indicators">("quiz");
-
-  const handleOpenModal = (startStep: "quiz" | "indicators") => {
-    setModalStartStep(startStep);
-    setIsModalOpen(true);
-  };
 
   const personalityInfo = personality ? personalityTextMap[personality] : null;
 
@@ -84,7 +80,7 @@ export default function MyPage() {
               <BarChart2 className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-xl font-semibold">나의 투자 성향</h2>
             </div>
-            <Button variant="outline" size="sm" onClick={() => handleOpenModal("quiz")}>
+            <Button variant="outline" size="sm" onClick={() => setIsPersonalityModalOpen(true)}>
               <Edit className="mr-2 h-4 w-4" />
               다시 분석하기
             </Button>
@@ -122,7 +118,7 @@ export default function MyPage() {
             </div>
             <div className="flex items-center gap-2">
               
-              <Button variant="outline" size="sm" onClick={() => handleOpenModal("indicators")}>
+              <Button variant="outline" size="sm" onClick={() => setIsIndicatorModalOpen(true)}>
                 <Edit className="mr-2 h-4 w-4" />
                 설정 변경하기
               </Button>
@@ -148,12 +144,15 @@ export default function MyPage() {
       </div>
 
       {/* Modals */}
-      <OnboardingModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialIndicators={preferences ?? undefined}
+      <InvestmentPersonalityModal
+        isOpen={isPersonalityModalOpen}
+        onClose={() => setIsPersonalityModalOpen(false)}
         initialAnswers={answers ?? undefined}
-        initialStep={modalStartStep}
+      />
+      <IndicatorPreferenceModal
+        isOpen={isIndicatorModalOpen}
+        onClose={() => setIsIndicatorModalOpen(false)}
+        initialIndicators={preferences ?? undefined}
       />
       <IndicatorHelpModal 
         isOpen={isHelpModalOpen}

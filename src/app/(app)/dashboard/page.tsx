@@ -16,7 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { useCurrency } from "@/contexts/currency-context";
 import { useFavorites } from "@/contexts/favorites-context";
 import { useInvestmentPersonality } from "@/contexts/investment-personality-context";
-import { OnboardingModal } from "@/components/survey/onboarding-modal";
 import { Inbox, Star } from "lucide-react";
 import { toast } from "sonner";
 import { InterestRateDisplay } from "@/components/dashboard/interest-rate-display";
@@ -43,23 +42,16 @@ interface SelectedStockInfo {
 export default function DashboardPage() {
   const { currency, formatCurrency } = useCurrency();
   const { favorites, removeFavorite } = useFavorites();
-  const { personality, isLoading: isLoadingPersonality } = useInvestmentPersonality();
+  const { isLoading: isLoadingPersonality } = useInvestmentPersonality();
 
   const [favoritesData, setFavoritesData] = useState<StockData[]>([]);
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(true);
-  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
 
   // 모달 상태 관리
   const [selectedStock, setSelectedStock] = useState<SelectedStockInfo | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const isCheckingUserSetup = isLoadingPersonality;
-
-  useEffect(() => {
-    if (!isCheckingUserSetup && !personality) {
-      setShowOnboardingModal(true);
-    }
-  }, [personality, isCheckingUserSetup]);
 
   useEffect(() => {
     if (isCheckingUserSetup || favorites.length === 0) {
@@ -111,10 +103,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      <OnboardingModal
-        isOpen={showOnboardingModal}
-        onClose={() => setShowOnboardingModal(false)}
-      />
       {/* 모달 기능을 위해 StockSearch 컴포넌트를 렌더링하지만, 검색 UI는 보이지 않도록 처리 */}
       <div className="hidden">
         <StockSearch

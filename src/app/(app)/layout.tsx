@@ -9,6 +9,7 @@ import { FavoritesProvider } from "@/contexts/favorites-context";
 import { IndicatorPreferenceProvider } from "@/contexts/indicator-preference-context";
 import { InvestmentPersonalityProvider } from "@/contexts/investment-personality-context";
 import { TradeLogProvider } from "@/contexts/trade-log-context";
+import { OnboardingManager } from "@/components/layout/onboarding-manager";
 
 export default async function AppLayout({
   children,
@@ -44,6 +45,7 @@ export default async function AppLayout({
             <IndicatorPreferenceProvider>
               <InvestmentPersonalityProvider>
                 <TradeLogProvider>
+                  <OnboardingManager />
                   {children}
                 </TradeLogProvider>
               </InvestmentPersonalityProvider>
