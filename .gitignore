@@ -42,6 +42,8 @@ next-env.d.ts
 
 /class-paper
 
+# 로컬 에러, sql, task 정의서
 ERROR.md
 SQL.md
 GEMINI.md
+TASK.md

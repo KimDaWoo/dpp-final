@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStockPriceHistory } from '@/lib/kis-api';
 
+
 function formatDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -8,9 +9,13 @@ function formatDate(date: Date): string {
   return `${year}${month}${day}`;
 }
 
+type RouteContext = {
+  params: Promise<{ symbol: string }>
+}
+
 export async function GET(
-  _request: NextRequest,
-  context: { params: { symbol: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
   const { symbol: rawSymbol } = await context.params;
   const symbol = rawSymbol?.toUpperCase();

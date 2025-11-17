@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStockDetails } from '@/lib/kis-api';
 import { findStockInCsv } from '@/lib/stock-utils';
 
+// Next.js 15+ 버전에서는 params가 Promise로 변경됨
+type RouteContext = {
+  params: Promise<{ symbol: string }>
+}
+
 export async function GET(
   request: NextRequest,
-  context: any
+  context: RouteContext
 ) {
-  const { symbol: rawSymbol } = await context.params;
+  // params를 await으로 받아야 함
+  const params = await context.params;
+  const rawSymbol = params.symbol;
   const symbol = rawSymbol?.toUpperCase();
 
   if (!symbol) {
