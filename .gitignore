@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 /class-paper
+
+ERROR.md
+SQL.md
+GEMINI.md

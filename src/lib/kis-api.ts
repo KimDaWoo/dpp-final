@@ -1,6 +1,5 @@
 import 'dotenv/config';
-import fs from 'fs/promises';
-import path from 'path';
+import { supabase } from './supabaseClient'; // Supabase 클라이언트 import
 import { loadStocks } from './stock-utils';
 
 // const KIS_BASE_URL = 'https://openapivts.koreainvestment.com:29443'; // 모의투자
@@ -8,35 +7,48 @@ const KIS_BASE_URL = 'https://openapi.koreainvestment.com:9443'; // 실전투자
 const APP_KEY = process.env.KIS_APP_KEY?.trim();
 const APP_SECRET = process.env.KIS_APP_SECRET?.trim();
 
-// --- 파일 기반 토큰 캐싱 로직 ---
-const TOKEN_CACHE_DIR = path.join(process.cwd(), '.temp');
-const TOKEN_CACHE_PATH = path.join(TOKEN_CACHE_DIR, 'kis_token.json');
+// --- Supabase 기반 토큰 관리 로직 ---
+const TOKEN_DB_ID = 'prod_kis_token'; // Supabase 테이블에서 사용할 고유 ID
 
 interface KisToken {
   access_token: string;
   token_type: string;
   expires_in: number;
   token_issued_at: number; // 토큰 발급 시간을 저장 (Unix timestamp, milliseconds)
+  access_token_token_expired: string; // KIS에서 받은 만료 시각 문자열
 }
 
 /**
- * KIS API 접근 토큰을 발급받거나 파일에 캐시된 토큰을 반환합니다.
+ * KIS API 접근 토큰을 발급받거나 Supabase에 캐시된 토큰을 반환합니다.
  * @param forceRefresh - true일 경우 캐시를 무시하고 강제로 새 토큰을 발급합니다.
  */
 async function getAccessToken(forceRefresh: boolean = false): Promise<string> {
   if (!forceRefresh) {
     try {
-      const cachedTokenStr = await fs.readFile(TOKEN_CACHE_PATH, 'utf-8');
-      const tokenData: KisToken = JSON.parse(cachedTokenStr);
-      const now = Date.now();
+      const { data: tokenData, error } = await supabase
+        .from('kis_tokens')
+        .select('*')
+        .eq('id', TOKEN_DB_ID)
+        .single();
 
-      // 만료 10분 전까지만 유효한 것으로 간주
-      if (now < tokenData.token_issued_at + (tokenData.expires_in - 600) * 1000) {
-        console.log('Using cached KIS access token from file.');
-        return tokenData.access_token;
+      if (error) {
+        // 데이터가 없는 경우(406 PostgREST error)는 정상 케이스이므로 에러를 던지지 않음
+        if (error.code !== 'PGRST116') {
+          throw error;
+        }
+      }
+      
+      if (tokenData) {
+        const now = Date.now();
+        // 만료 10분 전까지만 유효한 것으로 간주
+        if (now < new Date(tokenData.token_issued_at).getTime() + (tokenData.expires_in - 600) * 1000) {
+          console.log('Using cached KIS access token from Supabase.');
+          return tokenData.access_token;
+        }
       }
     } catch (error) {
-      // 캐시 파일이 없거나 유효하지 않으면 계속 진행
+      console.error('Error reading token from Supabase:', error);
+      // 캐시 읽기 실패 시 계속 진행하여 새 토큰 발급
     }
   }
 
@@ -57,14 +69,30 @@ async function getAccessToken(forceRefresh: boolean = false): Promise<string> {
       throw new Error(`Failed to get KIS access token: ${response.status} ${response.statusText} - ${errorBody}`);
     }
 
-    const tokenData = await response.json();
-    const newToken: KisToken = { ...tokenData, token_issued_at: Date.now() };
-
-    await fs.mkdir(TOKEN_CACHE_DIR, { recursive: true });
-    await fs.writeFile(TOKEN_CACHE_PATH, JSON.stringify(newToken));
-    console.log('New KIS access token saved to cache file.');
+    const apiTokenData = await response.json();
     
-    return newToken.access_token;
+    // Supabase에 저장할 데이터 구조에 맞게 가공
+    const tokenToStore = {
+      id: TOKEN_DB_ID,
+      access_token: apiTokenData.access_token,
+      access_token_token_expired: apiTokenData.access_token_token_expired,
+      token_type: apiTokenData.token_type,
+      expires_in: apiTokenData.expires_in,
+      token_issued_at: new Date().getTime(), // 현재 시간 (milliseconds)
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: upsertError } = await supabase
+      .from('kis_tokens')
+      .upsert(tokenToStore);
+
+    if (upsertError) {
+      console.error('Failed to save KIS access token to Supabase:', upsertError);
+    } else {
+      console.log('New KIS access token saved to Supabase.');
+    }
+    
+    return apiTokenData.access_token;
 
   } catch (error) {
     console.error('Error getting KIS access token:', error);

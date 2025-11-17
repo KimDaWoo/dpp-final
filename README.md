@@ -73,7 +73,15 @@ AUTH_SECRET=YOUR_GENERATED_SECRET
 # https://wikis.koreainvestment.com/ 에서 발급받을 수 있습니다.
 KIS_APP_KEY=YOUR_KIS_APP_KEY
 KIS_APP_SECRET=YOUR_KIS_APP_SECRET
+
+# Supabase 설정 (KIS API 토큰 영구 저장을 위해 필요)
+# Supabase 프로젝트 대시보드 > Project Settings > API 에서 확인 가능합니다.
+NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 ```
+
+**KIS API 토큰 관리 변경 사항:**
+기존에는 KIS API 접근 토큰이 로컬 파일 시스템에 저장되었으나, 이제는 Supabase 데이터베이스에 영구적으로 저장됩니다. 이는 Vercel과 같은 서버리스 배포 환경에서 토큰의 안정적인 관리를 보장합니다. Supabase 프로젝트에 `kis_tokens` 테이블이 올바르게 생성되어 있어야 합니다. (자세한 내용은 `SQL.md` 파일을 참조하세요.)
 
 ### 4. 개발 서버 실행
 
