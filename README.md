@@ -22,6 +22,7 @@
   - **시각적 명확성**: 매도 정보가 없는 항목은 'N/A' 대신 아이콘으로 표시하여 가독성을 높였습니다.
 - **마이페이지**: GitHub 계정 정보와 분석된 투자 성향을 확인하고, 안전하게 로그아웃할 수 있습니다.
 - **매매 기록 심층 분석**: 기록된 매매 내역을 바탕으로 성과를 분석하고 투자 결정을 복기할 수 있는 심층 분석 기능을 제공합니다.
+  - **AI 기반 분석 요약 (Gemini)**: 각 거래의 상세 분석 모달에서 Gemini API를 활용하여 매수/매도 시점의 지표를 기반으로 한 투자 결정의 긍정적, 부정적 측면과 결론, 배운 점을 AI가 자동으로 분석해주는 리포트를 제공합니다.
   - **종합 성과 대시보드**: 총 실현 손익, 전체 수익률, 승률, 평균 보유 기간 등 핵심 성과 지표를 한눈에 파악할 수 있습니다.
   - **매수/매도 시점 비교 분석**: 각 거래의 **실제 매수일과 매도일**의 재무 지표(PER, PBR, EPS)를 조회하고, 이를 객관적인 '가치주'와 '성장주' 참고 기준과 비교하여 자신의 투자 결정을 객관적으로 평가할 수 있습니다.
   - **지표 변화 분석**: 보유 기간 동안의 PBR, 거래량 등 핵심 지표 변화를 분석하여 "시장의 평가가 어떻게 변했는지"에 대한 자동 분석 코멘트를 제공합니다.
@@ -34,7 +35,7 @@
 - **UI**: Tailwind CSS, shadcn/ui, Recharts (차트)
 - **인증**: NextAuth.js v5
 - **데이터 소스**:
-  - **동적 데이터**: 한국투자증권(KIS) API (실시간 시세, 재무 정보)
+  - **동적 데이터**: 한국투자증권(KIS) API (실시간 시세, 재무 정보), Google Gemini API (AI 분석)
   - **정적 데이터**: 로컬 CSV 파일 (전체 종목 목록)
 - **전역 상태 관리**: React Context API
 - **클라이언트 상태**: `localStorage` (성향, 매매 기록, 통화 설정)
@@ -73,6 +74,9 @@ AUTH_SECRET=YOUR_GENERATED_SECRET
 # https://wikis.koreainvestment.com/ 에서 발급받을 수 있습니다.
 KIS_APP_KEY=YOUR_KIS_APP_KEY
 KIS_APP_SECRET=YOUR_KIS_APP_SECRET
+
+# Google Gemini API Key
+NEXT_PUBLIC_GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 
 # Supabase 설정 (KIS API 토큰 영구 저장을 위해 필요)
 # Supabase 프로젝트 대시보드 > Project Settings > API 에서 확인 가능합니다.

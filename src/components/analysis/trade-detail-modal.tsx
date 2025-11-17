@@ -1,17 +1,21 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AnalyzedTrade, classifyIndicators, IndicatorClassification } from "@/lib/analysis-utils";
+import { AnalyzedTrade, classifyIndicators } from "@/lib/analysis-utils";
 import { useCurrency } from "@/contexts/currency-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, ArrowUp, ArrowDown, Minus } from "lucide-react";
+import { Info } from "lucide-react";
+import { getGeminiAnalysis } from "@/lib/gemini-api";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface HistoricalData {
-  stck_clpr: number; // 종가
-  acml_vol: number;  // 거래량
+  stck_clpr: number;
+  acml_vol: number;
   eps: number;
   bps: number;
 }
@@ -25,7 +29,6 @@ interface TradeDetailModalProps {
   isLoading?: boolean;
 }
 
-// --- Helper Functions ---
 const formatCurrency = (amount: number, currency: "KRW" | "USD", exchangeRate?: number | null) => {
   const value = currency === "USD" && exchangeRate ? amount / exchangeRate : amount;
   const options: Intl.NumberFormatOptions = { style: "currency", currency, minimumFractionDigits: currency === "USD" ? 2 : 0, maximumFractionDigits: currency === "USD" ? 2 : 0 };
@@ -34,13 +37,12 @@ const formatCurrency = (amount: number, currency: "KRW" | "USD", exchangeRate?: 
 
 const calculateIndicator = (price: number, value: number) => (value > 0 ? price / value : 0);
 
-// --- Analysis Summary Generation ---
 const generateAnalysisSummary = (trade: AnalyzedTrade, buyData: HistoricalData, sellData: HistoricalData | null) => {
   const isProfit = trade.realizedProfitLoss > 0;
   const summary = `이 거래는 ${isProfit ? "수익" : "손실"}을 기록했습니다.`;
   const comments: string[] = [];
 
-  if (sellData) { // 일반 거래 분석
+  if (sellData) {
     const buyPBR = calculateIndicator(buyData.stck_clpr, buyData.bps);
     const sellPBR = calculateIndicator(sellData.stck_clpr, sellData.bps);
     const pbrChange = sellPBR - buyPBR;
@@ -61,7 +63,7 @@ const generateAnalysisSummary = (trade: AnalyzedTrade, buyData: HistoricalData, 
     if (comments.length === 0) {
       comments.push("보유 기간 동안 주요 지표의 유의미한 변화는 관찰되지 않았습니다.");
     }
-  } else { // 단타 거래 분석
+  } else {
     const classifications = classifyIndicators({
       per: calculateIndicator(buyData.stck_clpr, buyData.eps),
       pbr: calculateIndicator(buyData.stck_clpr, buyData.bps),
@@ -86,7 +88,6 @@ const generateAnalysisSummary = (trade: AnalyzedTrade, buyData: HistoricalData, 
   return { summary, comments };
 };
 
-// --- Sub-components ---
 const IndicatorEvaluationTable = ({ title, date, data }: { title: string, date: string, data: HistoricalData }) => {
   const calculatedPER = calculateIndicator(data.stck_clpr, data.eps);
   const calculatedPBR = calculateIndicator(data.stck_clpr, data.bps);
@@ -131,9 +132,70 @@ const IndicatorEvaluationTable = ({ title, date, data }: { title: string, date: 
   );
 };
 
-// --- Main Component ---
 export function TradeDetailModal({ isOpen, onClose, trade, buyDateData, sellDateData, isLoading = false }: TradeDetailModalProps) {
   const { currency, exchangeRate } = useCurrency();
+  const [geminiAnalysis, setGeminiAnalysis] = useState<string | null>(null);
+  const [isGeminiLoading, setIsGeminiLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && trade && buyDateData && !isLoading) {
+      const generatePrompt = () => {
+        const buyPER = calculateIndicator(buyDateData.stck_clpr, buyDateData.eps);
+        const buyPBR = calculateIndicator(buyDateData.stck_clpr, buyDateData.bps);
+        
+        let tradeData = `[TRADE DATA]
+- Stock: ${trade.name} (${trade.symbol})
+- Buy Date: ${trade.buyDate}
+- PER at Buy: ${buyPER.toFixed(2)}
+- PBR at Buy: ${buyPBR.toFixed(2)}
+- Return Rate: ${trade.returnRate.toFixed(2)}%
+`;
+
+        if (sellDateData) {
+          const sellPER = calculateIndicator(sellDateData.stck_clpr, sellDateData.eps);
+          const sellPBR = calculateIndicator(sellDateData.stck_clpr, sellDateData.bps);
+          tradeData += `- Sell Date: ${trade.sellDate}\n- PER at Sell: ${sellPER.toFixed(2)}\n- PBR at Sell: ${sellPBR.toFixed(2)}\n`;
+        }
+
+        const instructions = `[INSTRUCTIONS]
+You are a financial analyst. Your task is to analyze the provided trade data.
+Analyze the user's investment decision (buy/sell timing) for this trade based on the indicators. Explain the strengths and weaknesses in detail.
+Your analysis must be structured into exactly four sections: '## ✓ 긍정적 평가', '## ✘ 부정적 평가', '## » 결론', and '## ※ 배운 점'. Each section should be separated by a horizontal rule (---).
+Write the analysis directly as a continuous report or newspaper article format, without any introductory phrases. The entire response must be in Korean.`;
+
+        return `${tradeData}\n${instructions}`;
+      };
+
+      const fetchAnalysis = async () => {
+        setIsGeminiLoading(true);
+        setGeminiAnalysis(null);
+        try {
+          const prompt = generatePrompt();
+          const response = await fetch('/api/gemini-analysis', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ prompt }),
+          });
+
+          if (!response.ok) {
+            throw new Error('API request failed');
+          }
+
+          const data = await response.json();
+          setGeminiAnalysis(data.analysis);
+        } catch (error) {
+          console.error("Failed to get Gemini analysis:", error);
+          setGeminiAnalysis("분석을 가져오는 데 실패했습니다.");
+        } finally {
+          setIsGeminiLoading(false);
+        }
+      };
+
+      fetchAnalysis();
+    }
+  }, [isOpen, trade, buyDateData, sellDateData, isLoading]);
 
   if (!isOpen || !trade) return null;
 
@@ -153,6 +215,24 @@ export function TradeDetailModal({ isOpen, onClose, trade, buyDateData, sellDate
             <div><p className="text-sm text-muted-foreground">수익률</p><p className={`text-lg font-bold ${trade.returnRate >= 0 ? "text-red-600" : "text-blue-600"}`}>{trade.returnRate.toFixed(2)}%</p></div>
           </div>
 
+          <div>
+            <h3 className="text-lg font-semibold mb-2">분석 요약</h3>
+            {isGeminiLoading ? (
+              <div className="text-sm p-4 bg-muted/50 rounded-lg space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" /></div>
+            ) : geminiAnalysis ? (
+              <div className="text-sm p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h2: ({node, ...props}) => <h2 className="text-base font-semibold mt-3 first:mt-0" {...props} />,
+                  }}
+                >
+                  {geminiAnalysis}
+                </ReactMarkdown>
+              </div>
+            ) : null}
+          </div>
+
           {isLoading ? (
             <div className="space-y-6">
               <div><h3 className="text-lg font-semibold mb-2"><Skeleton className="h-6 w-40" /></h3><div className="rounded-md border p-4 space-y-2"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div></div>
@@ -165,8 +245,9 @@ export function TradeDetailModal({ isOpen, onClose, trade, buyDateData, sellDate
             </div>
           )}
 
-          <div>
-            <h3 className="text-lg font-semibold mb-2">분석 요약</h3>
+          
+          {/* <div>
+            <h3 className="text-lg font-semibold mb-2">기존 분석 요약</h3>
             {isLoading ? (
               <div className="text-sm p-4 bg-muted/50 rounded-lg space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-full" /></div>
             ) : analysisSummary ? (
@@ -175,7 +256,7 @@ export function TradeDetailModal({ isOpen, onClose, trade, buyDateData, sellDate
                 {analysisSummary.comments && analysisSummary.comments.length > 0 && (<ul className="list-disc pl-5 text-gray-600 space-y-1">{analysisSummary.comments.map((comment, i) => <li key={i}>{comment}</li>)}</ul>)}
               </div>
             ) : null}
-          </div>
+          </div> */}
           
           <div className="text-xs text-muted-foreground pt-4 border-t">
             <p>※ 위 참고 기준은 일반적인 투자 이론에 근거한 예시이며, 산업 특성이나 시장 상황에 따라 달라질 수 있습니다. 절대적인 투자 판단의 근거가 될 수 없으며, 투자 결정에 대한 책임은 본인에게 있습니다.</p>
