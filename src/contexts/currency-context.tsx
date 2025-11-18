@@ -14,7 +14,7 @@ interface CurrencyContextType {
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  const [currency, setCurrency] = useState<Currency>('USD');
+  const [currency, setCurrency] = useState<Currency>('KRW');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
 
   useEffect(() => {
