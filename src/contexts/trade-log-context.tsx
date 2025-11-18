@@ -14,6 +14,8 @@ export interface TradeLog {
   sellQuantity?: number;
   sellDate?: string; // "YYYY-MM-DD"
   profitRate?: number;
+  rationaleTags?: string[]; // 매수 근거 태그
+  rationale?: string; // 매수 근거
 }
 
 // Context에서 제공할 값들의 타입 정의

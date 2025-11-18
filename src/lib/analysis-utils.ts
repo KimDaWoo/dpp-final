@@ -17,6 +17,8 @@ export interface AnalyzedTrade {
   realizedProfitLoss: number; // 실현 손익
   returnRate: number; // 수익률 (%)
   holdingPeriod: number; // 보유 기간 (일)
+  rationaleTags?: string[];
+  rationale?: string;
 }
 
 // 종합 분석 결과의 타입 정의
@@ -58,6 +60,8 @@ function analyzeSingleTrade(trade: TradeLog): AnalyzedTrade | null {
     realizedProfitLoss,
     returnRate,
     holdingPeriod,
+    rationale: trade.rationale,
+    rationaleTags: trade.rationaleTags,
   };
 }
 

@@ -157,13 +157,25 @@ export function TradeDetailModal({ isOpen, onClose, trade, buyDateData, sellDate
           tradeData += `- Sell Date: ${trade.sellDate}\n- PER at Sell: ${sellPER.toFixed(2)}\n- PBR at Sell: ${sellPBR.toFixed(2)}\n`;
         }
 
+        let rationaleData = '';
+        if (trade.rationaleTags && trade.rationaleTags.length > 0) {
+          rationaleData += `- Rationale Tags: ${trade.rationaleTags.join(', ')}\n`;
+        }
+        if (trade.rationale) {
+          rationaleData += `- Rationale Notes: ${trade.rationale}\n`;
+        }
+        if (rationaleData) {
+          tradeData += `\n[USER'S RATIONALE FOR THIS TRADE]\n${rationaleData}`;
+        }
+
         const instructions = `[INSTRUCTIONS]
-You are a financial analyst. Your task is to analyze the provided trade data.
-Analyze the user's investment decision (buy/sell timing) for this trade based on the indicators. Explain the strengths and weaknesses in detail.
-Your analysis must be structured into exactly four sections: '## ✓ 긍정적 평가', '## ✘ 부정적 평가', '## » 결론', and '## ※ 배운 점'. Each section should be separated by a horizontal rule (---).
+You are a financial analyst. Your task is to analyze the provided trade data and the user's rationale.
+Analyze the user's investment decision (buy/sell timing) for this trade based on the indicators and their own reasoning. Explain the strengths and weaknesses in detail.
+Your analysis must be structured into exactly five sections: '## θ 내 근거 분석', '## ✓ 긍정적 평가', '## ✘ 부정적 평가', '## » 결론', and '## ※ 배운 점'. Each section should be separated by a horizontal rule (---).
+In the '## θ 내 근거 분석' section, specifically analyze the user's provided rationale (tags and notes) and comment on its validity and relevance.
 Write the analysis directly as a continuous report or newspaper article format, without any introductory phrases. The entire response must be in Korean.`;
 
-        return `${tradeData}\n${instructions}`;
+        return `${tradeData}\n\n${instructions}`;
       };
 
       const fetchAnalysis = async () => {
